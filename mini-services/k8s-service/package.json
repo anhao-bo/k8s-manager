@@ -1,0 +1,9 @@
+{
+  "name": "k8s-service",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "KUBECONFIG=/home/z/my-project/mini-services/k8s-service/.kube/config PORT=8080 ./k8s-service",
+    "build": "export PATH=$PATH:$HOME/go/bin && export GOPATH=$HOME/gopath && go build -o k8s-service main.go",
+    "start": "KUBECONFIG=/home/z/my-project/mini-services/k8s-service/.kube/config PORT=8080 ./k8s-service"
+  }
+}

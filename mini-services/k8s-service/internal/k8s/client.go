@@ -4,6 +4,7 @@ import (
         "context"
         "fmt"
         "io"
+        "os/exec"
         "path/filepath"
         "strings"
         "time"
@@ -1532,21 +1533,16 @@ func (c *Client) GetMiddlewareStatus() (*models.MiddlewareOverview, error) {
         return overview, nil
 }
 
-// GetPodYaml 获取 Pod 的 YAML 格式
+// GetPodYaml 获取 Pod 的 YAML 格式（直接使用 kubectl 命令，与命令行输出完全一致）
 func (c *Client) GetPodYaml(namespace, name string) (string, error) {
-        ctx := context.Background()
-        pod, err := c.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+        // 直接执行 kubectl get pod -o yaml 命令
+        kubectlPath := "/home/z/my-project/mini-services/k8s-service/kubectl"
+        cmd := exec.Command(kubectlPath, "get", "pod", name, "-n", namespace, "-o", "yaml")
+        output, err := cmd.CombinedOutput()
         if err != nil {
-                return "", err
+                return "", fmt.Errorf("kubectl get pod failed: %w, output: %s", err, string(output))
         }
-
-        // 使用 sigs.k8s.io/yaml 将 Pod 对象转换为 YAML
-        yamlBytes, err := yaml.Marshal(pod)
-        if err != nil {
-                return "", fmt.Errorf("failed to marshal pod to yaml: %w", err)
-        }
-
-        return string(yamlBytes), nil
+        return string(output), nil
 }
 
 // UpdatePodYamlResult 更新结果
@@ -1561,18 +1557,17 @@ type UpdatePodYamlResult struct {
 func (c *Client) UpdatePodYaml(namespace, name, newYamlStr string) (*UpdatePodYamlResult, error) {
         ctx := context.Background()
 
-        // 获取现有的 Pod
+        // 获取现有的 Pod（用于检查控制器管理和获取信息）
         existingPod, err := c.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
         if err != nil {
                 return nil, fmt.Errorf("failed to get existing pod: %w", err)
         }
 
-        // 获取现有 Pod 的 YAML
-        existingYamlBytes, err := yaml.Marshal(existingPod)
+        // 获取当前的 YAML（使用 kubectl 命令，与显示的一致）
+        existingYamlStr, err := c.GetPodYaml(namespace, name)
         if err != nil {
-                return nil, fmt.Errorf("failed to marshal existing pod: %w", err)
+                return nil, fmt.Errorf("failed to get existing pod yaml: %w", err)
         }
-        existingYamlStr := string(existingYamlBytes)
 
         // 比较 YAML 是否有变化（去除空白字符后比较）
         if strings.TrimSpace(newYamlStr) == strings.TrimSpace(existingYamlStr) {
@@ -1602,33 +1597,34 @@ func (c *Client) UpdatePodYaml(namespace, name, newYamlStr string) (*UpdatePodYa
                 return nil, fmt.Errorf("pod is managed by %s '%s', please edit the controller instead", owner.Kind, owner.Name)
         }
 
-        // 删除旧 Pod
-        if err := c.Clientset.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-                return nil, fmt.Errorf("failed to delete old pod: %w", err)
+        // 删除旧 Pod（使用 kubectl 命令）
+        kubectlPath := "/home/z/my-project/mini-services/k8s-service/kubectl"
+        deleteCmd := exec.Command(kubectlPath, "delete", "pod", name, "-n", namespace, "--ignore-not-found=true")
+        if deleteOutput, err := deleteCmd.CombinedOutput(); err != nil {
+                return nil, fmt.Errorf("kubectl delete pod failed: %w, output: %s", err, string(deleteOutput))
         }
 
-        // 清理系统生成的字段
-        newPod.ObjectMeta.ResourceVersion = ""
-        newPod.ObjectMeta.UID = ""
-        newPod.ObjectMeta.SelfLink = ""
-        newPod.ObjectMeta.CreationTimestamp = metav1.Time{}
-        newPod.ObjectMeta.Generation = 0
-        newPod.ObjectMeta.ManagedFields = nil
-        newPod.Status = corev1.PodStatus{} // 清空状态
-
-        // 清理 spec 中的系统生成字段
-        newPod.Spec.Hostname = ""
-        newPod.Spec.Subdomain = ""
-        newPod.Spec.NodeName = ""
-        newPod.Spec.ServiceAccountName = ""
-        if newPod.Spec.DeprecatedServiceAccount != "" {
-                newPod.Spec.DeprecatedServiceAccount = ""
+        // 等待 Pod 完全删除
+        for i := 0; i < 300; i++ { // 最多等待 3 秒
+                _, err := c.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        // Pod 已经被删除
+                        break
+                }
+                time.Sleep(10 * time.Millisecond)
         }
 
-        // 创建新 Pod
-        created, err := c.Clientset.CoreV1().Pods(namespace).Create(ctx, &newPod, metav1.CreateOptions{})
+        // 使用 kubectl apply 创建新 Pod
+        applyCmd := exec.Command(kubectlPath, "apply", "-f", "-")
+        applyCmd.Stdin = strings.NewReader(newYamlStr)
+        if applyOutput, err := applyCmd.CombinedOutput(); err != nil {
+                return nil, fmt.Errorf("kubectl apply failed: %w, output: %s", err, string(applyOutput))
+        }
+
+        // 获取新创建的 Pod 信息
+        created, err := c.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
         if err != nil {
-                return nil, fmt.Errorf("failed to create new pod: %w", err)
+                return nil, fmt.Errorf("failed to get created pod: %w", err)
         }
 
         return &UpdatePodYamlResult{

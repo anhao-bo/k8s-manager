@@ -760,10 +760,7 @@ export default function WorkloadsPage({ namespace }: WorkloadsPageProps) {
 
       {/* Terminal Dialog */}
       <Dialog open={isTerminalOpen} onOpenChange={setIsTerminalOpen}>
-        <DialogContent className="max-w-5xl h-[700px] bg-slate-900 border-slate-700 p-0">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Pod 终端 - {selectedPod?.name}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-5xl h-[600px] bg-[#0a0a0f] border-slate-700 p-0 overflow-hidden" showCloseButton={false}>
           {selectedPod && (
             <PodTerminal
               namespace={selectedPod.namespace}

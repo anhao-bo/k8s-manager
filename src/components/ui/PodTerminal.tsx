@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal as XTerm } from "xterm";
+import { Terminal } from "lucide-react";
 import { FitAddon } from "xterm-addon-fit";
 import { WebLinksAddon } from "xterm-addon-web-links";
 import { Button } from "@/components/ui/button";
@@ -243,30 +244,36 @@ export default function PodTerminal({ namespace, podName, container, onClose }: 
   }, [selectedShell]);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0f] rounded-lg overflow-hidden">
+    <div className="flex flex-col h-full bg-[#0a0a0f] overflow-hidden">
       {/* Terminal Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-900/80 border-b border-slate-700/50">
+        <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <button
+              onClick={onClose}
+              className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-400 transition-colors cursor-pointer"
+              title="关闭终端"
+            />
             <div className="w-3 h-3 rounded-full bg-yellow-500" />
             <div className="w-3 h-3 rounded-full bg-green-500" />
           </div>
-          <span className="text-sm text-slate-400 ml-2">
-            {podName} • {namespace}
+          <span className="text-sm text-slate-300 font-medium">
+            {podName}
           </span>
+          <span className="text-xs text-slate-500">•</span>
+          <span className="text-xs text-slate-500">{namespace}</span>
           {selectedShell && isConnected && (
-            <span className="text-xs text-emerald-400 ml-2 px-2 py-0.5 bg-emerald-500/10 rounded">
-              {selectedShell}
+            <span className="text-xs text-emerald-400 px-2 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/20">
+              {selectedShell.split('/').pop()}
             </span>
           )}
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-sm px-2 py-1 rounded hover:bg-slate-800"
+            className="text-slate-500 hover:text-white text-xs px-3 py-1.5 rounded-md hover:bg-slate-700/50 transition-colors border border-slate-700/50"
           >
-            ✕
+            断开连接
           </button>
         )}
       </div>
@@ -274,22 +281,24 @@ export default function PodTerminal({ namespace, podName, container, onClose }: 
       {/* Shell Selector or Terminal Container */}
       {!selectedShell ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="text-center mb-6">
-            <div className="text-4xl mb-3">🖥️</div>
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-4 mx-auto border border-sky-500/20">
+              <Terminal className="w-8 h-8 text-sky-400" />
+            </div>
             <h3 className="text-xl font-bold text-white mb-2">选择 Shell 解释器</h3>
             <p className="text-slate-400 text-sm">
-              选择要在容器中使用的 Shell 类型
+              选择要在容器 <span className="text-sky-400 font-mono">{podName}</span> 中使用的 Shell 类型
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 w-full max-w-md">
+          <div className="grid grid-cols-2 gap-3 w-full max-w-lg">
             {SHELL_OPTIONS.map((shell) => (
               <button
                 key={shell.value}
                 onClick={() => setSelectedShell(shell.value)}
-                className="flex flex-col items-start p-4 rounded-lg border border-slate-700 bg-slate-800/50 hover:border-sky-500 hover:bg-slate-800 transition-all text-left group"
+                className="flex flex-col items-start p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-sky-500/50 hover:bg-slate-800 transition-all text-left group"
               >
-                <span className="text-lg font-mono text-white group-hover:text-sky-400">
+                <span className="text-lg font-mono text-white group-hover:text-sky-400 transition-colors">
                   {shell.label}
                 </span>
                 <span className="text-xs text-slate-500 font-mono">
@@ -310,7 +319,7 @@ export default function PodTerminal({ namespace, podName, container, onClose }: 
         <div
           ref={terminalRef}
           className="flex-1 p-2 overflow-hidden"
-          style={{ height: "calc(100% - 40px)" }}
+          style={{ height: "calc(100% - 52px)" }}
         />
       )}
     </div>

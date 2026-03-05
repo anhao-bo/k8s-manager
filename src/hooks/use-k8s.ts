@@ -401,6 +401,63 @@ export function useDeletePod() {
   };
 }
 
+// 重建 Pod（先删除后创建）
+export function useRecreatePod() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (params: { namespace: string; name: string; yaml: string }) => {
+      const { namespace, name, yaml } = params;
+      
+      // 等待函数
+      const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      
+      // 步骤 1: 删除旧 Pod
+      const deleteRes = await fetch(`/api/pods?XTransformPort=8080`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ namespace, name }),
+      });
+      
+      if (!deleteRes.ok) {
+        const error = await deleteRes.json().catch(() => ({ error: 'Failed to delete pod' }));
+        throw new Error(error.error || 'Failed to delete pod');
+      }
+      
+      // 步骤 2: 等待 Pod 被删除
+      for (let i = 0; i < 30; i++) {
+        try {
+          const checkRes = await fetch(`/api/pods/yaml?namespace=${namespace}&name=${name}`);
+          if (!checkRes.ok) {
+            // Pod 已经不存在了，可以创建新的
+            break;
+          }
+        } catch {
+          break;
+        }
+        await sleep(1000);
+      }
+      
+      // 步骤 3: 创建新 Pod（使用 apply API）
+      const applyResponse = await fetch('/api/apply?XTransformPort=8080', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ yaml, namespace }),
+      });
+      
+      if (!applyResponse.ok) {
+        const error = await applyResponse.json().catch(() => ({ error: 'Failed to create pod' }));
+        throw new Error(error.error || 'Failed to create pod');
+      }
+      
+      return applyResponse.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['k8s', 'pods'] });
+    },
+  });
+}
+
 export function useDeleteDeployment() {
   const mutation = useK8sMutation();
   return {
@@ -508,7 +565,14 @@ export function useDeleteNamespace() {
 export function usePodYaml(namespace: string, name: string) {
   return useQuery({
     queryKey: ['k8s', 'pod-yaml', namespace, name],
-    queryFn: () => fetchApi<{ yaml: string }>(`${API_BASE}/pods/yaml?namespace=${namespace}&name=${name}`),
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE}/pods/yaml?namespace=${namespace}&name=${name}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || error.message || 'Request failed');
+      }
+      return response.json();
+    },
     enabled: !!namespace && !!name,
   });
 }
@@ -518,12 +582,18 @@ export function useUpdatePodYaml() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (params: { namespace: string; name: string; yaml: string }) =>
-      fetchApi(`${API_BASE}/pods/yaml`, {
+    mutationFn: async (params: { namespace: string; name: string; yaml: string }) => {
+      const response = await fetch(`${API_BASE}/pods/yaml`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
-      }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || error.message || 'Request failed');
+      }
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['k8s', 'pods'] });
     },

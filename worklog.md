@@ -212,3 +212,57 @@ Stage Summary:
 - YAML 有变化时显示"Pod 已删除并重新创建"
 - 由控制器管理的 Pod 显示"pod is managed by ReplicaSet 'xxx', please edit the controller instead"
 - 前端添加了操作提示，用户体验更清晰
+
+---
+Task ID: 9
+Agent: Main
+Task: 修复 Pod YAML 更新功能的并发问题
+
+Work Log:
+- 问题分析：
+  - PUT 请求返回 405 Method Not Allowed（已解决，是之前的临时问题）
+  - 后端删除 Pod 后立即创建新 Pod 失败，因为 Kubernetes 删除是异步的
+  - Go 编译器不可用，无法重新编译后端
+- 解决方案：
+  - 创建 Next.js API 路由 /api/pods/yaml/route.ts 处理完整逻辑
+  - 在前端实现等待删除完成后再创建的逻辑
+  - 使用正则表达式从 YAML 解析容器名称和镜像信息
+  - 调用 CreatePod API 重新创建 Pod
+- 修改的文件：
+  - /src/app/api/pods/yaml/route.ts - 新建，处理 YAML 获取和更新
+  - /src/hooks/use-k8s.ts - 更新 usePodYaml 和 useUpdatePodYaml hooks
+  - /src/hooks/use-k8s.ts - 添加 useRecreatePod hook（备用）
+- 测试验证：
+  - 创建测试 Pod (test-standalone-pod, nginx:alpine)
+  - 修改 YAML 更改镜像版本 (nginx:alpine → nginx:latest)
+  - 成功删除旧 Pod 并创建新 Pod
+  - 新 Pod 使用正确的镜像运行
+
+Stage Summary:
+- Pod YAML 更新功能完整实现
+- 无变化时显示"YAML 内容未发生变化，保持不变"
+- 有变化时显示"Pod 已删除并重新创建"
+- 支持镜像版本更改验证通过
+- 由控制器管理的 Pod 仍返回错误提示
+- 注意：由于无法编译 Go 代码，后端代码修改（添加等待逻辑）未生效，使用前端 API 路由绕过此限制
+
+---
+Task ID: 10
+Agent: Main
+Task: 最终修复 Pod YAML 功能
+
+Work Log:
+- 发现 Go 编译器可用：GOROOT=/tmp/go/go
+- 修复后端 UpdatePodYaml 函数：清理系统字段后再比较 YAML
+- 修复 kubeconfig: cp .kube/config ~/.kube/config
+- 简化前端 API 路由：直接透传到后端处理
+- 验证功能：
+  - 无变化：返回 {"status":"no_change","message":"YAML 内容未发生变化，保持不变"}
+  - 有变化：返回 {"status":"updated","message":"Pod 已删除并重新创建"}
+  - YAML 格式干净，无 f: 前缀字段
+
+Stage Summary:
+- Go 编译环境：GOROOT=/tmp/go/go, PATH=$PATH:$GOROOT/bin
+- Pod YAML 功能完整实现
+- YAML 格式与 kubectl get pod -o yaml 一致
+- 无变化检测、有变化删除重建、控制器检测均正常工作

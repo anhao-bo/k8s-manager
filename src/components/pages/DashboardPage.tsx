@@ -1,9 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Cpu,
   Database,
@@ -33,16 +41,49 @@ interface DashboardPageProps {
   onNavigate?: (page: string) => void;
 }
 
-// CPU/Memory trend data (simulated for visualization)
-const cpuData = [
-  { time: "00:00", cpu: 35, memory: 65 },
-  { time: "04:00", cpu: 32, memory: 68 },
-  { time: "08:00", cpu: 45, memory: 72 },
-  { time: "12:00", cpu: 55, memory: 85 },
-  { time: "16:00", cpu: 48, memory: 82 },
-  { time: "20:00", cpu: 44, memory: 79 },
-  { time: "Now", cpu: 42, memory: 78 },
+// 时间范围选项
+const TIME_RANGE_OPTIONS = [
+  { value: "1m", label: "1分钟" },
+  { value: "3m", label: "3分钟" },
+  { value: "5m", label: "5分钟" },
+  { value: "15m", label: "15分钟" },
+  { value: "1h", label: "1小时" },
+  { value: "3h", label: "3小时" },
+  { value: "6h", label: "6小时" },
+  { value: "12h", label: "12小时" },
+  { value: "24h", label: "24小时" },
 ];
+
+// 根据时间范围生成模拟数据
+function generateTrendData(timeRange: string) {
+  const now = new Date();
+  const data: { time: string; cpu: number; memory: number }[] = [];
+  
+  const config: Record<string, { points: number; interval: number; format: (d: Date) => string }> = {
+    "1m": { points: 12, interval: 5, format: (d) => d.toLocaleTimeString('zh-CN', { minute: '2-digit', second: '2-digit' }) },
+    "3m": { points: 18, interval: 10, format: (d) => d.toLocaleTimeString('zh-CN', { minute: '2-digit', second: '2-digit' }) },
+    "5m": { points: 25, interval: 12, format: (d) => d.toLocaleTimeString('zh-CN', { minute: '2-digit', second: '2-digit' }) },
+    "15m": { points: 30, interval: 30, format: (d) => d.toLocaleTimeString('zh-CN', { minute: '2-digit', second: '2-digit' }) },
+    "1h": { points: 24, interval: 150, format: (d) => d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) },
+    "3h": { points: 36, interval: 300, format: (d) => d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) },
+    "6h": { points: 36, interval: 600, format: (d) => d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) },
+    "12h": { points: 48, interval: 900, format: (d) => d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) },
+    "24h": { points: 24, interval: 3600, format: (d) => d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) },
+  };
+  
+  const { points, interval, format } = config[timeRange] || config["24h"];
+  
+  for (let i = points - 1; i >= 0; i--) {
+    const time = new Date(now.getTime() - i * interval * 1000);
+    data.push({
+      time: format(time),
+      cpu: Math.floor(30 + Math.random() * 35),
+      memory: Math.floor(60 + Math.random() * 25),
+    });
+  }
+  
+  return data;
+}
 
 // Loading skeleton
 function LoadingSkeleton() {
@@ -119,12 +160,18 @@ function StatCard({
 }
 
 export default function DashboardPage({ onNavigate }: DashboardPageProps) {
+  const [timeRange, setTimeRange] = useState("24h");
+  const [chartType, setChartType] = useState<"cpu" | "memory">("memory");
+  
   const { data: status, isLoading: statusLoading } = useClusterStatus();
   const { data: overview, isLoading: overviewLoading } = useClusterOverview();
   const { data: events } = useEvents();
   const { data: pods } = usePods();
 
   const isLoading = statusLoading || overviewLoading;
+  
+  // 生成趋势数据
+  const trendData = generateTrendData(timeRange);
 
   // Check connection status
   if (!isLoading && status && !status.connected) {
@@ -284,22 +331,38 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         {/* Main Chart */}
         <div className="col-span-2 glass-card p-6">
           <div className="flex items-center justify-between mb-6">
-            <h4 className="font-bold flex items-center gap-2 text-white">
-              <BarChart3 className="text-sky-400 h-5 w-5" />
-              集群负载趋势 (24h)
-            </h4>
+            <div className="flex items-center gap-3">
+              <h4 className="font-bold flex items-center gap-2 text-white">
+                <BarChart3 className="text-sky-400 h-5 w-5" />
+                集群负载趋势
+              </h4>
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger className="w-[100px] h-8 bg-slate-800 border-slate-700 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {TIME_RANGE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                className="px-3 py-1 bg-slate-800 text-[10px] rounded-md hover:bg-slate-700"
+                onClick={() => setChartType("cpu")}
+                className={`px-3 py-1 text-[10px] rounded-md ${chartType === "cpu" ? "bg-sky-500 text-white" : "bg-slate-800 hover:bg-slate-700"}`}
               >
                 CPU
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                className="px-3 py-1 bg-sky-500 text-[10px] rounded-md text-white"
+                onClick={() => setChartType("memory")}
+                className={`px-3 py-1 text-[10px] rounded-md ${chartType === "memory" ? "bg-sky-500 text-white" : "bg-slate-800 hover:bg-slate-700"}`}
               >
                 Memory
               </Button>
@@ -307,7 +370,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           </div>
           <div className="w-full h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cpuData}>
+              <AreaChart data={trendData}>
                 <defs>
                   <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.4} />
@@ -335,6 +398,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   stroke="#a855f7"
                   strokeWidth={2}
                   fill="url(#memGradient)"
+                  hide={chartType !== "memory"}
                 />
                 <Area
                   type="monotone"
@@ -342,6 +406,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   stroke="#38bdf8"
                   strokeWidth={2}
                   fill="url(#cpuGradient)"
+                  hide={chartType !== "cpu"}
                 />
               </AreaChart>
             </ResponsiveContainer>

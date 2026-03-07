@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -31,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Search,
   Plus,
@@ -44,7 +44,8 @@ import {
   Eye,
   Loader2,
 } from "lucide-react";
-import { useDeployments, useScaleDeployment, useRestartDeployment } from "@/hooks/use-k8s";
+import { useDeployments, useScaleDeployment, useRestartDeployment, useCreateDeployment, useDeleteDeployment, useNamespaces } from "@/hooks/use-k8s";
+import { useToast } from "@/hooks/use-toast";
 
 interface DeploymentsPageProps {
   namespace: string;
@@ -96,16 +97,29 @@ function LoadingSkeleton() {
 export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    image: "",
+    namespace: "default",
+    replicas: 1,
+    port: 80,
+  });
+
+  const { toast } = useToast();
 
   // Fetch real K8s data
-  const { data: deployments, isLoading, refetch } = useDeployments();
+  const { data: deployments, isLoading, refetch, isRefetching } = useDeployments();
+  const { data: namespaces } = useNamespaces();
   
   // Mutations
   const scaleDeployment = useScaleDeployment();
   const restartDeployment = useRestartDeployment();
+  const createDeployment = useCreateDeployment();
+  const deleteDeployment = useDeleteDeployment();
 
   // Ensure data is array
   const deploymentsList = Array.isArray(deployments) ? deployments : [];
+  const namespacesList = Array.isArray(namespaces) ? namespaces : [];
 
   // Filter deployments by namespace and search term
   const filteredDeployments = deploymentsList.filter(
@@ -120,14 +134,71 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
   const handleScale = (deployNamespace: string, deployName: string, currentReplicas: number) => {
     const replicas = prompt(`当前副本数: ${currentReplicas}\n请输入新的副本数:`, String(currentReplicas));
     if (replicas) {
-      scaleDeployment.mutate(deployNamespace, deployName, parseInt(replicas));
+      const replicaNum = parseInt(replicas);
+      if (isNaN(replicaNum) || replicaNum < 0) {
+        toast({ title: "输入无效", description: "请输入有效的正整数", variant: "destructive" });
+        return;
+      }
+      scaleDeployment.mutate(deployNamespace, deployName, replicaNum, {
+        onSuccess: () => {
+          toast({ title: "扩缩容成功", description: `Deployment ${deployName} 副本数已设置为 ${replicaNum}` });
+        },
+        onError: (error) => {
+          toast({ title: "扩缩容失败", description: error.message, variant: "destructive" });
+        },
+      });
     }
   };
 
   // Handle deployment restart
   const handleRestart = (deployNamespace: string, deployName: string) => {
     if (confirm(`确定要重启 Deployment "${deployName}" 吗？`)) {
-      restartDeployment.mutate(deployNamespace, deployName);
+      restartDeployment.mutate(deployNamespace, deployName, {
+        onSuccess: () => {
+          toast({ title: "重启成功", description: `Deployment ${deployName} 正在重启` });
+        },
+        onError: (error) => {
+          toast({ title: "重启失败", description: error.message, variant: "destructive" });
+        },
+      });
+    }
+  };
+
+  // Handle create deployment
+  const handleCreate = () => {
+    if (!form.name || !form.image) {
+      toast({ title: "表单不完整", description: "请填写名称和镜像", variant: "destructive" });
+      return;
+    }
+    createDeployment.mutate({
+      namespace: form.namespace,
+      name: form.name,
+      image: form.image,
+      replicas: form.replicas,
+      containerPort: form.port,
+    }, {
+      onSuccess: () => {
+        toast({ title: "创建成功", description: `Deployment ${form.name} 已创建` });
+        setIsCreateOpen(false);
+        setForm({ name: "", image: "", namespace: "default", replicas: 1, port: 80 });
+      },
+      onError: (error) => {
+        toast({ title: "创建失败", description: error.message, variant: "destructive" });
+      },
+    });
+  };
+
+  // Handle delete deployment
+  const handleDelete = (deployNamespace: string, deployName: string) => {
+    if (confirm(`确定要删除 Deployment "${deployName}" 吗？这将删除所有关联的 Pod。`)) {
+      deleteDeployment.mutate(deployNamespace, deployName, {
+        onSuccess: () => {
+          toast({ title: "删除成功", description: `Deployment ${deployName} 已删除` });
+        },
+        onError: (error) => {
+          toast({ title: "删除失败", description: error.message, variant: "destructive" });
+        },
+      });
     }
   };
 
@@ -153,39 +224,100 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
             variant="ghost" 
             className="glass-card px-4 py-2 text-sm text-slate-300"
             onClick={() => refetch()}
+            disabled={isRefetching}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            刷新
+            {isRefetching ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                刷新中...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                刷新
+              </>
+            )}
           </Button>
+          
+          {/* 独立的创建按钮 */}
+          <Button 
+            className="bg-sky-500 hover:bg-sky-600 px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-sky-500/20"
+            onClick={() => setIsCreateOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            创建 Deployment
+          </Button>
+          
+          {/* 创建对话框 */}
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-sky-500 hover:bg-sky-600 px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-sky-500/20">
-                <Plus className="h-4 w-4 mr-2" />
-                创建 Deployment
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-700">
+            <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700">
               <DialogHeader>
                 <DialogTitle className="text-white">创建 Deployment</DialogTitle>
                 <DialogDescription className="text-slate-400">创建新的 Deployment 工作负载</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-slate-300">名称</Label>
-                  <Input placeholder="my-deployment" className="col-span-3 bg-slate-800 border-slate-600" />
+                  <Label className="text-right text-slate-300">命名空间</Label>
+                  <Select value={form.namespace} onValueChange={(v) => setForm({ ...form, namespace: v })}>
+                    <SelectTrigger className="col-span-3 bg-slate-800 border-slate-600">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-600">
+                      <SelectItem value="default">default</SelectItem>
+                      {namespacesList.map((ns) => (
+                        <SelectItem key={ns.name} value={ns.name}>{ns.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-slate-300">镜像</Label>
-                  <Input placeholder="nginx:latest" className="col-span-3 bg-slate-800 border-slate-600" />
+                  <Label className="text-right text-slate-300">名称 *</Label>
+                  <Input 
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="my-app" 
+                    className="col-span-3 bg-slate-800 border-slate-600" 
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-slate-300">镜像 *</Label>
+                  <Input 
+                    value={form.image}
+                    onChange={(e) => setForm({ ...form, image: e.target.value })}
+                    placeholder="nginx:latest" 
+                    className="col-span-3 bg-slate-800 border-slate-600" 
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right text-slate-300">副本数</Label>
-                  <Input type="number" placeholder="1" className="col-span-3 bg-slate-800 border-slate-600" />
+                  <Input 
+                    type="number"
+                    value={form.replicas}
+                    onChange={(e) => setForm({ ...form, replicas: parseInt(e.target.value) || 1 })}
+                    min={1}
+                    className="col-span-3 bg-slate-800 border-slate-600" 
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-slate-300">容器端口</Label>
+                  <Input 
+                    type="number"
+                    value={form.port}
+                    onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 80 })}
+                    className="col-span-3 bg-slate-800 border-slate-600" 
+                  />
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setIsCreateOpen(false)} className="text-slate-300">取消</Button>
-                <Button onClick={() => setIsCreateOpen(false)} className="bg-sky-500 hover:bg-sky-600">创建</Button>
+                <Button 
+                  onClick={handleCreate} 
+                  className="bg-sky-500 hover:bg-sky-600"
+                  disabled={createDeployment.isPending}
+                >
+                  {createDeployment.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  创建
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -290,7 +422,10 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
                           <Copy className="h-4 w-4 mr-2" /> 扩缩容
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-slate-700" />
-                        <DropdownMenuItem className="text-rose-500 focus:bg-rose-500/10">
+                        <DropdownMenuItem 
+                          className="text-rose-500 focus:bg-rose-500/10"
+                          onClick={() => handleDelete(deploy.namespace, deploy.name)}
+                        >
                           <Trash2 className="h-4 w-4 mr-2" /> 删除
                         </DropdownMenuItem>
                       </DropdownMenuContent>

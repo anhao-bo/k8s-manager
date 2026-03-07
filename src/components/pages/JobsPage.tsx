@@ -12,6 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Play,
   Search,
@@ -21,7 +23,6 @@ import {
   CheckCircle2,
   XCircle,
   Timer,
-  RotateCcw,
   MoreHorizontal,
   Pause,
   Square,
@@ -30,7 +31,8 @@ import {
   Calendar,
   Loader2,
 } from "lucide-react";
-import { useJobs } from "@/hooks/use-k8s";
+import { useJobs, useCreateJob, useDeleteJob, useNamespaces } from "@/hooks/use-k8s";
+import { useToast } from "@/hooks/use-toast";
 
 // Format age from date
 function formatAge(dateStr: string): string {
@@ -110,19 +112,80 @@ function LoadingSkeleton() {
 }
 
 export default function JobsPage() {
-  const [activeTab, setActiveTab] = useState("jobs");
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({
+    namespace: "default",
+    name: "",
+    image: "",
+    command: "",
+    args: "",
+    completions: 1,
+    parallelism: 1,
+    backoffLimit: 6,
+  });
 
-  const { data: jobs, isLoading, refetch } = useJobs();
+  const { toast } = useToast();
+  const { data: jobs, isLoading, refetch, isRefetching } = useJobs();
+  const { data: namespaces } = useNamespaces();
+  
+  // Mutations
+  const createJob = useCreateJob();
+  const deleteJob = useDeleteJob();
   
   // Ensure data is array
   const jobsList = Array.isArray(jobs) ? jobs : [];
+  const namespacesList = Array.isArray(namespaces) ? namespaces : [];
 
   const filteredJobs = jobsList.filter(
     (j) => j.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
             j.namespace.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Handle create
+  const handleCreate = () => {
+    if (!form.name || !form.image) {
+      toast({ title: "表单不完整", description: "请填写名称和镜像", variant: "destructive" });
+      return;
+    }
+    
+    const command = form.command ? form.command.split(" ").filter(Boolean) : undefined;
+    const args = form.args ? form.args.split(" ").filter(Boolean) : undefined;
+    
+    createJob.mutate({
+      namespace: form.namespace,
+      name: form.name,
+      image: form.image,
+      command,
+      args,
+      completions: form.completions,
+      parallelism: form.parallelism,
+      backoffLimit: form.backoffLimit,
+    }, {
+      onSuccess: () => {
+        toast({ title: "创建成功", description: `Job ${form.name} 已创建` });
+        setShowCreate(false);
+        setForm({ namespace: "default", name: "", image: "", command: "", args: "", completions: 1, parallelism: 1, backoffLimit: 6 });
+      },
+      onError: (error) => {
+        toast({ title: "创建失败", description: error.message, variant: "destructive" });
+      },
+    });
+  };
+
+  // Handle delete
+  const handleDelete = (jobNamespace: string, jobName: string) => {
+    if (confirm(`确定要删除 Job "${jobName}" 吗？`)) {
+      deleteJob.mutate(jobNamespace, jobName, {
+        onSuccess: () => {
+          toast({ title: "删除成功", description: `Job ${jobName} 已删除` });
+        },
+        onError: (error) => {
+          toast({ title: "删除失败", description: error.message, variant: "destructive" });
+        },
+      });
+    }
+  };
 
   if (isLoading) {
     return <LoadingSkeleton />;
@@ -148,10 +211,22 @@ export default function JobsPage() {
             variant="outline" 
             className="border-slate-700 text-slate-300"
             onClick={() => refetch()}
+            disabled={isRefetching}
           >
-            <RefreshCw className="h-4 w-4 mr-2" /> 刷新
+            {isRefetching ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> 刷新中...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" /> 刷新
+              </>
+            )}
           </Button>
-          <Button className="bg-sky-500 hover:bg-sky-600 text-white" onClick={() => setShowCreate(true)}>
+          <Button 
+            className="bg-sky-500 hover:bg-sky-600 text-white" 
+            onClick={() => setShowCreate(true)}
+          >
             <Plus className="h-4 w-4 mr-2" /> 创建任务
           </Button>
         </div>
@@ -262,8 +337,13 @@ export default function JobsPage() {
                           <Square className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                        <RotateCcw className="h-4 w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-rose-400 hover:text-rose-300"
+                        onClick={() => handleDelete(job.namespace, job.name)}
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </td>
@@ -291,30 +371,77 @@ export default function JobsPage() {
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">名称</label>
-                <Input placeholder="my-job" className="bg-slate-800 border-slate-700" />
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm text-slate-300">命名空间</label>
-                <Input placeholder="default" className="bg-slate-800 border-slate-700" />
+                <Select value={form.namespace} onValueChange={(v) => setForm({ ...form, namespace: v })}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectItem value="default">default</SelectItem>
+                    {namespacesList.map((ns) => (
+                      <SelectItem key={ns.name} value={ns.name}>{ns.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300">名称 *</label>
+                <Input 
+                  placeholder="my-job" 
+                  className="bg-slate-800 border-slate-700"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">镜像</label>
-              <Input placeholder="busybox:latest" className="bg-slate-800 border-slate-700" />
+              <label className="text-sm text-slate-300">镜像 *</label>
+              <Input 
+                placeholder="busybox:latest" 
+                className="bg-slate-800 border-slate-700"
+                value={form.image}
+                onChange={(e) => setForm({ ...form, image: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">命令</label>
-              <Input placeholder='["echo", "hello"]' className="bg-slate-800 border-slate-700 font-mono text-xs" />
+              <label className="text-sm text-slate-300">命令 (空格分隔)</label>
+              <Input 
+                placeholder='echo hello' 
+                className="bg-slate-800 border-slate-700"
+                value={form.command}
+                onChange={(e) => setForm({ ...form, command: e.target.value })}
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">重试次数</label>
-                <Input placeholder="3" type="number" className="bg-slate-800 border-slate-700" />
+                <label className="text-sm text-slate-300">完成次数</label>
+                <Input 
+                  placeholder="1" 
+                  type="number" 
+                  className="bg-slate-800 border-slate-700"
+                  value={form.completions}
+                  onChange={(e) => setForm({ ...form, completions: parseInt(e.target.value) || 1 })}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm text-slate-300">并行数</label>
-                <Input placeholder="1" type="number" className="bg-slate-800 border-slate-700" />
+                <Input 
+                  placeholder="1" 
+                  type="number" 
+                  className="bg-slate-800 border-slate-700"
+                  value={form.parallelism}
+                  onChange={(e) => setForm({ ...form, parallelism: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300">重试次数</label>
+                <Input 
+                  placeholder="6" 
+                  type="number" 
+                  className="bg-slate-800 border-slate-700"
+                  value={form.backoffLimit}
+                  onChange={(e) => setForm({ ...form, backoffLimit: parseInt(e.target.value) || 6 })}
+                />
               </div>
             </div>
           </div>
@@ -322,7 +449,12 @@ export default function JobsPage() {
             <Button variant="outline" onClick={() => setShowCreate(false)} className="border-slate-700 text-slate-300">
               取消
             </Button>
-            <Button className="bg-sky-500 hover:bg-sky-600" onClick={() => setShowCreate(false)}>
+            <Button 
+              className="bg-sky-500 hover:bg-sky-600" 
+              onClick={handleCreate}
+              disabled={createJob.isPending}
+            >
+              {createJob.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               创建
             </Button>
           </DialogFooter>

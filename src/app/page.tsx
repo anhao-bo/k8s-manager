@@ -46,6 +46,7 @@ import {
   PlusCircle,
   Activity,
   Monitor,
+  Copy,
 } from "lucide-react";
 import DashboardPage from "@/components/pages/DashboardPage";
 import ClustersPage from "@/components/pages/ClustersPage";
@@ -71,6 +72,11 @@ import SettingsPage from "@/components/pages/SettingsPage";
 import APMMonitorPage from "@/components/pages/APMMonitorPage";
 import IngressPage from "@/components/pages/IngressPage";
 import JobsPage from "@/components/pages/JobsPage";
+import CronJobsPage from "@/components/pages/CronJobsPage";
+import HPAPage from "@/components/pages/HPAPage";
+import ReplicaSetsPage from "@/components/pages/ReplicaSetsPage";
+import { Clock } from "lucide-react";
+import { useNamespaces } from "@/hooks/use-k8s";
 
 const menuItems = [
   // 核心
@@ -84,6 +90,9 @@ const menuItems = [
   { title: "StatefulSets", icon: Database, page: "statefulsets", group: "工作负载" },
   { title: "DaemonSets", icon: RotateCcw, page: "daemonsets", group: "工作负载" },
   { title: "Jobs", icon: Play, page: "jobs", group: "工作负载" },
+  { title: "CronJobs", icon: Clock, page: "cronjobs", group: "工作负载" },
+  { title: "ReplicaSets", icon: Copy, page: "replicasets", group: "工作负载" },
+  { title: "HPA 自动扩缩", icon: Gauge, page: "hpa", group: "工作负载" },
   // 网络
   { title: "服务与路由", icon: Network, page: "services", group: "网络" },
   { title: "Ingress", icon: Globe, page: "ingress", group: "网络" },
@@ -114,7 +123,11 @@ export default function K8sManager() {
   const [currentNamespace, setCurrentNamespace] = useState("default");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const namespaces = ["default", "kube-system", "production", "staging", "development"];
+  // Fetch namespaces from API
+  const { data: namespacesData } = useNamespaces();
+  const namespaces = namespacesData && Array.isArray(namespacesData) 
+    ? namespacesData.map(ns => ns.name)
+    : ["default"];
 
   const renderPage = () => {
     switch (currentPage) {
@@ -170,6 +183,12 @@ export default function K8sManager() {
         return <IngressPage />;
       case "jobs":
         return <JobsPage />;
+      case "cronjobs":
+        return <CronJobsPage namespace={currentNamespace} />;
+      case "replicasets":
+        return <ReplicaSetsPage namespace={currentNamespace} />;
+      case "hpa":
+        return <HPAPage namespace={currentNamespace} />;
       default:
         return <DashboardPage />;
     }

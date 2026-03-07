@@ -474,6 +474,55 @@ func (h *Handler) GetStatefulSets(c *gin.Context) {
         c.JSON(http.StatusOK, sts)
 }
 
+// CreateStatefulSet 创建StatefulSet
+func (h *Handler) CreateStatefulSet(c *gin.Context) {
+        var req models.CreateStatefulSetRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        sts, err := h.Client.CreateStatefulSet(req)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, sts)
+}
+
+// DeleteStatefulSet 删除StatefulSet
+func (h *Handler) DeleteStatefulSet(c *gin.Context) {
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        if err := h.Client.DeleteStatefulSet(req.Namespace, req.Name); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "statefulset deleted successfully",
+        })
+}
+
 // ==================== DaemonSets ====================
 
 // GetDaemonSets 获取DaemonSet列表
@@ -490,6 +539,55 @@ func (h *Handler) GetDaemonSets(c *gin.Context) {
         c.JSON(http.StatusOK, dss)
 }
 
+// CreateDaemonSet 创建DaemonSet
+func (h *Handler) CreateDaemonSet(c *gin.Context) {
+        var req models.CreateDaemonSetRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        ds, err := h.Client.CreateDaemonSet(req)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, ds)
+}
+
+// DeleteDaemonSet 删除DaemonSet
+func (h *Handler) DeleteDaemonSet(c *gin.Context) {
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        if err := h.Client.DeleteDaemonSet(req.Namespace, req.Name); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "daemonset deleted successfully",
+        })
+}
+
 // ==================== Jobs ====================
 
 // GetJobs 获取Job列表
@@ -504,6 +602,206 @@ func (h *Handler) GetJobs(c *gin.Context) {
                 return
         }
         c.JSON(http.StatusOK, jobs)
+}
+
+// CreateJob 创建Job
+func (h *Handler) CreateJob(c *gin.Context) {
+        var req models.CreateJobRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        job, err := h.Client.CreateJob(req)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, job)
+}
+
+// DeleteJob 删除Job
+func (h *Handler) DeleteJob(c *gin.Context) {
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        if err := h.Client.DeleteJob(req.Namespace, req.Name); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "job deleted successfully",
+        })
+}
+
+// ==================== CronJobs ====================
+
+// GetCronJobs 获取CronJob列表
+func (h *Handler) GetCronJobs(c *gin.Context) {
+        namespace := c.Query("namespace")
+        cronjobs, err := h.Client.GetCronJobs(namespace)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, cronjobs)
+}
+
+// CreateCronJob 创建CronJob
+func (h *Handler) CreateCronJob(c *gin.Context) {
+        var req models.CreateCronJobRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        cronjob, err := h.Client.CreateCronJob(req)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, cronjob)
+}
+
+// DeleteCronJob 删除CronJob
+func (h *Handler) DeleteCronJob(c *gin.Context) {
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        if err := h.Client.DeleteCronJob(req.Namespace, req.Name); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "cronjob deleted successfully",
+        })
+}
+
+// ==================== ReplicaSets ====================
+
+// GetReplicaSets 获取ReplicaSet列表
+func (h *Handler) GetReplicaSets(c *gin.Context) {
+        namespace := c.Query("namespace")
+        rss, err := h.Client.GetReplicaSets(namespace)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, rss)
+}
+
+// DeleteReplicaSet 删除ReplicaSet
+func (h *Handler) DeleteReplicaSet(c *gin.Context) {
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        if err := h.Client.DeleteReplicaSet(req.Namespace, req.Name); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "replicaset deleted successfully",
+        })
+}
+
+// ==================== HPAs ====================
+
+// GetHPAs 获取HPA列表
+func (h *Handler) GetHPAs(c *gin.Context) {
+        namespace := c.Query("namespace")
+        hpas, err := h.Client.GetHPAs(namespace)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, hpas)
+}
+
+// DeleteHPA 删除HPA
+func (h *Handler) DeleteHPA(c *gin.Context) {
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        if err := h.Client.DeleteHPA(req.Namespace, req.Name); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "hpa deleted successfully",
+        })
 }
 
 // ==================== Services ====================

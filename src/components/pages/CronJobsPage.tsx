@@ -21,23 +21,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Search,
   Plus,
   MoreHorizontal,
   RefreshCw,
-  Edit,
   Trash2,
-  Database,
+  Clock,
   Eye,
   Loader2,
+  Pause,
+  Play,
 } from "lucide-react";
-import { useStatefulSets, useCreateStatefulSet, useDeleteStatefulSet, useNamespaces } from "@/hooks/use-k8s";
+import { useCronJobs, useCreateCronJob, useDeleteCronJob, useNamespaces } from "@/hooks/use-k8s";
 import { useToast } from "@/hooks/use-toast";
 
-interface StatefulSetsPageProps {
+interface CronJobsPageProps {
   namespace: string;
 }
 
@@ -54,6 +54,23 @@ function formatAge(dateStr: string): string {
   if (days > 0) return `${days}d`;
   if (hours > 0) return `${hours}h`;
   if (minutes > 0) return `${minutes}m`;
+  return "刚刚";
+}
+
+// Format last schedule time
+function formatLastSchedule(dateStr?: string): string {
+  if (!dateStr) return "从未执行";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) return `${days}天前`;
+  if (hours > 0) return `${hours}小时前`;
+  if (minutes > 0) return `${minutes}分钟前`;
   return "刚刚";
 }
 
@@ -84,62 +101,61 @@ function LoadingSkeleton() {
   );
 }
 
-export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
+export default function CronJobsPage({ namespace }: CronJobsPageProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState({
     name: "",
     image: "",
     namespace: "default",
-    replicas: 1,
-    port: 80,
-    serviceName: "",
-    storageClass: "",
-    storageSize: "1Gi",
+    schedule: "0 * * * *",
+    command: "",
+    suspend: false,
   });
 
   const { toast } = useToast();
   
-  const { data: statefulSets, isLoading, refetch, isRefetching } = useStatefulSets();
+  const { data: cronjobs, isLoading, refetch, isRefetching } = useCronJobs();
   const { data: namespaces } = useNamespaces();
   
   // Mutations
-  const createStatefulSet = useCreateStatefulSet();
-  const deleteStatefulSet = useDeleteStatefulSet();
+  const createCronJob = useCreateCronJob();
+  const deleteCronJob = useDeleteCronJob();
   
   // Ensure data is array
-  const statefulSetsList = Array.isArray(statefulSets) ? statefulSets : [];
+  const cronjobsList = Array.isArray(cronjobs) ? cronjobs : [];
   const namespacesList = Array.isArray(namespaces) ? namespaces : [];
   
   // Filter by namespace and search term
-  const filteredStatefulSets = statefulSetsList.filter(
-    (s) => {
-      const matchesNamespace = namespace === "default" || s.namespace === namespace;
-      const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredCronJobs = cronjobsList.filter(
+    (cj) => {
+      const matchesNamespace = namespace === "default" || cj.namespace === namespace;
+      const matchesSearch = cj.name.toLowerCase().includes(searchTerm.toLowerCase());
       return matchesNamespace && matchesSearch;
     }
   );
 
   // Handle create
   const handleCreate = () => {
-    if (!form.name || !form.image) {
-      toast({ title: "表单不完整", description: "请填写名称和镜像", variant: "destructive" });
+    if (!form.name || !form.image || !form.schedule) {
+      toast({ title: "表单不完整", description: "请填写名称、镜像和调度表达式", variant: "destructive" });
       return;
     }
-    createStatefulSet.mutate({
+    
+    const command = form.command ? form.command.split(" ").filter(Boolean) : undefined;
+    
+    createCronJob.mutate({
       namespace: form.namespace,
       name: form.name,
       image: form.image,
-      replicas: form.replicas,
-      containerPort: form.port,
-      serviceName: form.serviceName || `${form.name}-headless`,
-      storageClass: form.storageClass || undefined,
-      storageSize: form.storageSize || undefined,
+      schedule: form.schedule,
+      command,
+      suspend: form.suspend,
     }, {
       onSuccess: () => {
-        toast({ title: "创建成功", description: `StatefulSet ${form.name} 已创建` });
+        toast({ title: "创建成功", description: `CronJob ${form.name} 已创建` });
         setIsCreateOpen(false);
-        setForm({ name: "", image: "", namespace: "default", replicas: 1, port: 80, serviceName: "", storageClass: "", storageSize: "1Gi" });
+        setForm({ name: "", image: "", namespace: "default", schedule: "0 * * * *", command: "", suspend: false });
       },
       onError: (error) => {
         toast({ title: "创建失败", description: error.message, variant: "destructive" });
@@ -148,11 +164,11 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
   };
 
   // Handle delete
-  const handleDelete = (stsNamespace: string, stsName: string) => {
-    if (confirm(`确定要删除 StatefulSet "${stsName}" 吗？这将删除所有关联的 Pod 和 PVC。`)) {
-      deleteStatefulSet.mutate(stsNamespace, stsName, {
+  const handleDelete = (cjNamespace: string, cjName: string) => {
+    if (confirm(`确定要删除 CronJob "${cjName}" 吗？这将删除所有关联的 Job。`)) {
+      deleteCronJob.mutate(cjNamespace, cjName, {
         onSuccess: () => {
-          toast({ title: "删除成功", description: `StatefulSet ${stsName} 已删除` });
+          toast({ title: "删除成功", description: `CronJob ${cjName} 已删除` });
         },
         onError: (error) => {
           toast({ title: "删除失败", description: error.message, variant: "destructive" });
@@ -166,17 +182,16 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
   }
 
   // Calculate stats
-  const healthyCount = filteredStatefulSets.filter((s) => s.readyReplicas === s.replicas).length;
-  const warningCount = filteredStatefulSets.filter((s) => s.readyReplicas < s.replicas && s.readyReplicas > 0).length;
-  const errorCount = filteredStatefulSets.filter((s) => s.readyReplicas === 0).length;
+  const activeCount = filteredCronJobs.filter((cj) => !cj.suspend).length;
+  const suspendedCount = filteredCronJobs.filter((cj) => cj.suspend).length;
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-white">StatefulSets</h2>
-          <p className="text-slate-400 text-sm mt-1">管理有状态应用，如数据库和消息队列</p>
+          <h2 className="text-2xl font-bold text-white">CronJobs</h2>
+          <p className="text-slate-400 text-sm mt-1">管理定时任务，按照 Cron 表达式周期性执行</p>
         </div>
         <div className="flex gap-4">
           <Button 
@@ -203,15 +218,15 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
             onClick={() => setIsCreateOpen(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
-            创建 StatefulSet
+            创建 CronJob
           </Button>
           
           {/* Create Dialog */}
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700">
               <DialogHeader>
-                <DialogTitle className="text-white">创建 StatefulSet</DialogTitle>
-                <DialogDescription className="text-slate-400">创建新的 StatefulSet 工作负载</DialogDescription>
+                <DialogTitle className="text-white">创建 CronJob</DialogTitle>
+                <DialogDescription className="text-slate-400">创建新的定时任务</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -233,7 +248,7 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
                   <Input 
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="my-app" 
+                    placeholder="my-cronjob" 
                     className="col-span-3 bg-slate-800 border-slate-600" 
                   />
                 </div>
@@ -242,46 +257,30 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
                   <Input 
                     value={form.image}
                     onChange={(e) => setForm({ ...form, image: e.target.value })}
-                    placeholder="nginx:latest" 
+                    placeholder="busybox:latest" 
                     className="col-span-3 bg-slate-800 border-slate-600" 
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-slate-300">副本数</Label>
+                  <Label className="text-right text-slate-300">调度表达式 *</Label>
                   <Input 
-                    type="number"
-                    value={form.replicas}
-                    onChange={(e) => setForm({ ...form, replicas: parseInt(e.target.value) || 1 })}
-                    min={1}
+                    value={form.schedule}
+                    onChange={(e) => setForm({ ...form, schedule: e.target.value })}
+                    placeholder="0 * * * *" 
                     className="col-span-3 bg-slate-800 border-slate-600" 
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-slate-300">容器端口</Label>
+                  <Label className="text-right text-slate-300">命令</Label>
                   <Input 
-                    type="number"
-                    value={form.port}
-                    onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 80 })}
+                    value={form.command}
+                    onChange={(e) => setForm({ ...form, command: e.target.value })}
+                    placeholder="echo hello (空格分隔)" 
                     className="col-span-3 bg-slate-800 border-slate-600" 
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-slate-300">Service名称</Label>
-                  <Input 
-                    value={form.serviceName}
-                    onChange={(e) => setForm({ ...form, serviceName: e.target.value })}
-                    placeholder="自动生成 headless service" 
-                    className="col-span-3 bg-slate-800 border-slate-600" 
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-slate-300">存储大小</Label>
-                  <Input 
-                    value={form.storageSize}
-                    onChange={(e) => setForm({ ...form, storageSize: e.target.value })}
-                    placeholder="1Gi" 
-                    className="col-span-3 bg-slate-800 border-slate-600" 
-                  />
+                <div className="text-xs text-slate-500 col-span-4 text-center">
+                  调度表达式格式：分 时 日 月 周 (例如: "0 * * * *" 每小时执行)
                 </div>
               </div>
               <DialogFooter>
@@ -289,9 +288,9 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
                 <Button 
                   onClick={handleCreate} 
                   className="bg-sky-500 hover:bg-sky-600"
-                  disabled={createStatefulSet.isPending}
+                  disabled={createCronJob.isPending}
                 >
-                  {createStatefulSet.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  {createCronJob.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                   创建
                 </Button>
               </DialogFooter>
@@ -303,16 +302,16 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="glass-card p-4">
-          <p className="text-slate-400 text-xs">StatefulSets</p>
-          <p className="text-2xl font-bold text-white mt-2">{filteredStatefulSets.length}</p>
+          <p className="text-slate-400 text-xs">CronJobs</p>
+          <p className="text-2xl font-bold text-white mt-2">{filteredCronJobs.length}</p>
         </div>
         <div className="glass-card p-4">
-          <p className="text-slate-400 text-xs">健康</p>
-          <p className="text-2xl font-bold text-emerald-400 mt-2">{healthyCount}</p>
+          <p className="text-slate-400 text-xs">活跃</p>
+          <p className="text-2xl font-bold text-emerald-400 mt-2">{activeCount}</p>
         </div>
         <div className="glass-card p-4">
-          <p className="text-slate-400 text-xs">异常</p>
-          <p className="text-2xl font-bold text-rose-400 mt-2">{errorCount}</p>
+          <p className="text-slate-400 text-xs">暂停</p>
+          <p className="text-2xl font-bold text-amber-400 mt-2">{suspendedCount}</p>
         </div>
       </div>
 
@@ -322,47 +321,56 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <Input
-              placeholder="搜索 StatefulSet..."
+              placeholder="搜索 CronJob..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 bg-slate-900 border-slate-700"
             />
           </div>
         </div>
-        {filteredStatefulSets.length > 0 ? (
+        {filteredCronJobs.length > 0 ? (
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
               <tr>
                 <th className="px-6 py-4 font-medium">名称</th>
                 <th className="px-6 py-4 font-medium">命名空间</th>
-                <th className="px-6 py-4 font-medium">副本</th>
-                <th className="px-6 py-4 font-medium">Service</th>
+                <th className="px-6 py-4 font-medium">调度</th>
+                <th className="px-6 py-4 font-medium">状态</th>
+                <th className="px-6 py-4 font-medium">活跃Job</th>
+                <th className="px-6 py-4 font-medium">上次执行</th>
                 <th className="px-6 py-4 font-medium">存活时间</th>
                 <th className="px-6 py-4 text-right">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {filteredStatefulSets.map((sts) => (
-                <tr key={`${sts.namespace}-${sts.name}`} className="hover:bg-slate-800/20 transition-colors">
+              {filteredCronJobs.map((cj) => (
+                <tr key={`${cj.namespace}-${cj.name}`} className="hover:bg-slate-800/20 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4 text-purple-400" />
-                      <span className="font-mono font-bold text-sky-400">{sts.name}</span>
+                      <Clock className="h-4 w-4 text-purple-400" />
+                      <span className="font-mono font-bold text-sky-400">{cj.name}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded text-xs text-slate-300">{sts.namespace}</span>
+                    <span className="bg-slate-800 px-2 py-0.5 rounded text-xs text-slate-300">{cj.namespace}</span>
                   </td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-300">{cj.schedule}</td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className={sts.readyReplicas === sts.replicas ? "text-emerald-400" : "text-amber-400"}>
-                        {sts.readyReplicas}/{sts.replicas}
-                      </span>
-                      <Progress value={(sts.readyReplicas / Math.max(sts.replicas, 1)) * 100} className="w-12 h-1.5" />
-                    </div>
+                    {cj.suspend ? (
+                      <Badge className="bg-amber-500/10 text-amber-400 border-0">
+                        <Pause className="h-3 w-3 mr-1" />
+                        暂停
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-500/10 text-emerald-400 border-0">
+                        <Play className="h-3 w-3 mr-1" />
+                        活跃
+                      </Badge>
+                    )}
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-400">{sts.serviceName || "-"}</td>
-                  <td className="px-6 py-4 text-slate-500">{formatAge(sts.createdAt)}</td>
+                  <td className="px-6 py-4 text-slate-300">{cj.activeJobs}</td>
+                  <td className="px-6 py-4 text-slate-400 text-xs">{formatLastSchedule(cj.lastScheduleTime)}</td>
+                  <td className="px-6 py-4 text-slate-500">{formatAge(cj.createdAt)}</td>
                   <td className="px-6 py-4 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -376,13 +384,10 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
                         <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
                           <Eye className="h-4 w-4 mr-2" /> 查看详情
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
-                          <Edit className="h-4 w-4 mr-2" /> 编辑
-                        </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-slate-700" />
                         <DropdownMenuItem 
                           className="text-rose-500 focus:bg-rose-500/10"
-                          onClick={() => handleDelete(sts.namespace, sts.name)}
+                          onClick={() => handleDelete(cj.namespace, cj.name)}
                         >
                           <Trash2 className="h-4 w-4 mr-2" /> 删除
                         </DropdownMenuItem>
@@ -395,8 +400,8 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
           </table>
         ) : (
           <div className="p-12 text-center">
-            <Database className="h-12 w-12 mx-auto text-slate-600 mb-4" />
-            <p className="text-slate-400 text-sm">当前命名空间没有 StatefulSet</p>
+            <Clock className="h-12 w-12 mx-auto text-slate-600 mb-4" />
+            <p className="text-slate-400 text-sm">当前命名空间没有 CronJob</p>
           </div>
         )}
       </div>

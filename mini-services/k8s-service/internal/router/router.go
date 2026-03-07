@@ -57,12 +57,31 @@ func SetupRouter(h *handlers.Handler) *gin.Engine {
 
                 // StatefulSets
                 api.GET("/statefulsets", h.GetStatefulSets)
+                api.POST("/statefulsets", h.CreateStatefulSet)
+                api.DELETE("/statefulsets", h.DeleteStatefulSet)
 
                 // DaemonSets
                 api.GET("/daemonsets", h.GetDaemonSets)
+                api.POST("/daemonsets", h.CreateDaemonSet)
+                api.DELETE("/daemonsets", h.DeleteDaemonSet)
 
                 // Jobs
                 api.GET("/jobs", h.GetJobs)
+                api.POST("/jobs", h.CreateJob)
+                api.DELETE("/jobs", h.DeleteJob)
+
+                // CronJobs
+                api.GET("/cronjobs", h.GetCronJobs)
+                api.POST("/cronjobs", h.CreateCronJob)
+                api.DELETE("/cronjobs", h.DeleteCronJob)
+
+                // ReplicaSets
+                api.GET("/replicasets", h.GetReplicaSets)
+                api.DELETE("/replicasets", h.DeleteReplicaSet)
+
+                // HPAs
+                api.GET("/hpas", h.GetHPAs)
+                api.DELETE("/hpas", h.DeleteHPA)
 
                 // Services
                 api.GET("/services", h.GetServices)

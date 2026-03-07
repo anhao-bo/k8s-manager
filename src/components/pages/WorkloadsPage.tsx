@@ -392,12 +392,14 @@ export default function WorkloadsPage({ namespace }: WorkloadsPageProps) {
           
           {/* Create Pod Dialog - 只在 Pods 标签页显示 */}
           {activeTab === "pods" && (
-            <Dialog open={isCreatePodOpen} onOpenChange={setIsCreatePodOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-sky-500 hover:bg-sky-600 px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-sky-500/20">
-                  <Plus className="h-4 w-4" /> 创建 Pod
-                </Button>
-              </DialogTrigger>
+            <>
+              <Button 
+                className="bg-sky-500 hover:bg-sky-600 px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-sky-500/20"
+                onClick={() => setIsCreatePodOpen(true)}
+              >
+                <Plus className="h-4 w-4" /> 创建 Pod
+              </Button>
+              <Dialog open={isCreatePodOpen} onOpenChange={setIsCreatePodOpen}>
             <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700">
               <DialogHeader>
                 <DialogTitle className="text-white">创建 Pod</DialogTitle>
@@ -441,8 +443,8 @@ export default function WorkloadsPage({ namespace }: WorkloadsPageProps) {
                 <Button variant="ghost" onClick={() => setIsCreatePodOpen(false)} className="text-slate-300">
                   取消
                 </Button>
-                <Button 
-                  onClick={handleCreatePod} 
+                <Button
+                  onClick={handleCreatePod}
                   className="bg-sky-500 hover:bg-sky-600"
                   disabled={createPod.isPending}
                 >
@@ -452,16 +454,19 @@ export default function WorkloadsPage({ namespace }: WorkloadsPageProps) {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+            </>
           )}
 
           {/* Create Deployment Dialog - 只在 Deployments 标签页显示 */}
           {activeTab === "deployments" && (
-            <Dialog open={isCreateDeployOpen} onOpenChange={setIsCreateDeployOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-sky-500 hover:bg-sky-600 px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-sky-500/20">
-                  <Plus className="h-4 w-4" /> 创建 Deployment
-                </Button>
-              </DialogTrigger>
+            <>
+              <Button 
+                className="bg-sky-500 hover:bg-sky-600 px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-sky-500/20"
+                onClick={() => setIsCreateDeployOpen(true)}
+              >
+                <Plus className="h-4 w-4" /> 创建 Deployment
+              </Button>
+              <Dialog open={isCreateDeployOpen} onOpenChange={setIsCreateDeployOpen}>
             <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-700">
               <DialogHeader>
                 <DialogTitle className="text-white">创建 Deployment</DialogTitle>
@@ -524,8 +529,8 @@ export default function WorkloadsPage({ namespace }: WorkloadsPageProps) {
                 <Button variant="ghost" onClick={() => setIsCreateDeployOpen(false)} className="text-slate-300">
                   取消
                 </Button>
-                <Button 
-                  onClick={handleCreateDeployment} 
+                <Button
+                  onClick={handleCreateDeployment}
                   className="bg-sky-500 hover:bg-sky-600"
                   disabled={createDeployment.isPending}
                 >
@@ -535,6 +540,7 @@ export default function WorkloadsPage({ namespace }: WorkloadsPageProps) {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+            </>
           )}
         </div>
       </div>

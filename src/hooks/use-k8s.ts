@@ -500,10 +500,22 @@ export function useCreatePod() {
       args?: string[];
       env?: Record<string, string>;
       ports?: number[];
-    }) => mutation.mutate({
-      endpoint: '/pods',
-      body: params
-    }),
+    }, callbacks?: { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/pods',
+          body: params
+        },
+        {
+          onSuccess: (result) => {
+            callbacks?.onSuccess?.(result);
+          },
+          onError: (error) => {
+            callbacks?.onError?.(error);
+          },
+        }
+      );
+    },
     isPending: mutation.isPending,
     isError: mutation.isError,
     isSuccess: mutation.isSuccess,
@@ -522,13 +534,356 @@ export function useCreateDeployment() {
       containerName?: string;
       containerPort?: number;
       labels?: Record<string, string>;
-    }) => mutation.mutate({
-      endpoint: '/deployments',
-      body: params
-    }),
+    }, callbacks?: { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/deployments',
+          body: params
+        },
+        {
+          onSuccess: (result) => {
+            callbacks?.onSuccess?.(result);
+          },
+          onError: (error) => {
+            callbacks?.onError?.(error);
+          },
+        }
+      );
+    },
     isPending: mutation.isPending,
     isError: mutation.isError,
     isSuccess: mutation.isSuccess,
+  };
+}
+
+// 创建 StatefulSet
+export function useCreateStatefulSet() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (params: {
+      namespace: string;
+      name: string;
+      image: string;
+      replicas?: number;
+      containerName?: string;
+      containerPort?: number;
+      serviceName?: string;
+      storageClass?: string;
+      storageSize?: string;
+      labels?: Record<string, string>;
+    }, callbacks?: { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/statefulsets',
+          body: params
+        },
+        {
+          onSuccess: (result) => {
+            callbacks?.onSuccess?.(result);
+          },
+          onError: (error) => {
+            callbacks?.onError?.(error);
+          },
+        }
+      );
+    },
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    isSuccess: mutation.isSuccess,
+  };
+}
+
+// 创建 DaemonSet
+export function useCreateDaemonSet() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (params: {
+      namespace: string;
+      name: string;
+      image: string;
+      containerName?: string;
+      containerPort?: number;
+      labels?: Record<string, string>;
+    }, callbacks?: { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/daemonsets',
+          body: params
+        },
+        {
+          onSuccess: (result) => {
+            callbacks?.onSuccess?.(result);
+          },
+          onError: (error) => {
+            callbacks?.onError?.(error);
+          },
+        }
+      );
+    },
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    isSuccess: mutation.isSuccess,
+  };
+}
+
+// 创建 Job
+export function useCreateJob() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (params: {
+      namespace: string;
+      name: string;
+      image: string;
+      containerName?: string;
+      command?: string[];
+      args?: string[];
+      completions?: number;
+      parallelism?: number;
+      backoffLimit?: number;
+      labels?: Record<string, string>;
+    }, callbacks?: { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/jobs',
+          body: params
+        },
+        {
+          onSuccess: (result) => {
+            callbacks?.onSuccess?.(result);
+          },
+          onError: (error) => {
+            callbacks?.onError?.(error);
+          },
+        }
+      );
+    },
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    isSuccess: mutation.isSuccess,
+  };
+}
+
+// 删除 StatefulSet
+export function useDeleteStatefulSet() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (namespace: string, name: string, callbacks?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/statefulsets',
+          method: 'DELETE',
+          body: { namespace, name }
+        },
+        {
+          onSuccess: () => callbacks?.onSuccess?.(),
+          onError: (error) => callbacks?.onError?.(error),
+        }
+      );
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+// 删除 DaemonSet
+export function useDeleteDaemonSet() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (namespace: string, name: string, callbacks?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/daemonsets',
+          method: 'DELETE',
+          body: { namespace, name }
+        },
+        {
+          onSuccess: () => callbacks?.onSuccess?.(),
+          onError: (error) => callbacks?.onError?.(error),
+        }
+      );
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+// 删除 Job
+export function useDeleteJob() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (namespace: string, name: string, callbacks?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/jobs',
+          method: 'DELETE',
+          body: { namespace, name }
+        },
+        {
+          onSuccess: () => callbacks?.onSuccess?.(),
+          onError: (error) => callbacks?.onError?.(error),
+        }
+      );
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+// ==================== CronJobs ====================
+
+export function useCronJobs(namespace?: string) {
+  return useQuery({
+    queryKey: ['k8s', 'cronjobs', namespace],
+    queryFn: () => fetchApi<Array<{
+      name: string;
+      namespace: string;
+      schedule: string;
+      suspend: boolean;
+      lastScheduleTime?: string;
+      activeJobs: number;
+      lastSuccessfulJob?: string;
+      labels: Record<string, string>;
+      createdAt: string;
+    }>>(`${API_BASE}/cronjobs${namespace ? `?namespace=${namespace}` : ''}`),
+    refetchInterval: 15000,
+  });
+}
+
+export function useCreateCronJob() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (params: {
+      namespace: string;
+      name: string;
+      image: string;
+      containerName?: string;
+      command?: string[];
+      args?: string[];
+      schedule: string;
+      suspend?: boolean;
+      successfulJobsHistoryLimit?: number;
+      failedJobsHistoryLimit?: number;
+      labels?: Record<string, string>;
+    }, callbacks?: { onSuccess?: (result: unknown) => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/cronjobs',
+          body: params
+        },
+        {
+          onSuccess: (result) => {
+            callbacks?.onSuccess?.(result);
+          },
+          onError: (error) => {
+            callbacks?.onError?.(error);
+          },
+        }
+      );
+    },
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    isSuccess: mutation.isSuccess,
+  };
+}
+
+export function useDeleteCronJob() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (namespace: string, name: string, callbacks?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/cronjobs',
+          method: 'DELETE',
+          body: { namespace, name }
+        },
+        {
+          onSuccess: () => callbacks?.onSuccess?.(),
+          onError: (error) => callbacks?.onError?.(error),
+        }
+      );
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+// ==================== ReplicaSets ====================
+
+export function useReplicaSets(namespace?: string) {
+  return useQuery({
+    queryKey: ['k8s', 'replicasets', namespace],
+    queryFn: () => fetchApi<Array<{
+      name: string;
+      namespace: string;
+      replicas: number;
+      readyReplicas: number;
+      ownerRef?: { kind: string; name: string };
+      labels: Record<string, string>;
+      createdAt: string;
+    }>>(`${API_BASE}/replicasets${namespace ? `?namespace=${namespace}` : ''}`),
+    refetchInterval: 15000,
+  });
+}
+
+export function useDeleteReplicaSet() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (namespace: string, name: string, callbacks?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/replicasets',
+          method: 'DELETE',
+          body: { namespace, name }
+        },
+        {
+          onSuccess: () => callbacks?.onSuccess?.(),
+          onError: (error) => callbacks?.onError?.(error),
+        }
+      );
+    },
+    isPending: mutation.isPending,
+  };
+}
+
+// ==================== HPAs ====================
+
+export function useHPAs(namespace?: string) {
+  return useQuery({
+    queryKey: ['k8s', 'hpas', namespace],
+    queryFn: () => fetchApi<Array<{
+      name: string;
+      namespace: string;
+      scaleTargetRef: { kind: string; name: string };
+      minReplicas: number;
+      maxReplicas: number;
+      currentReplicas: number;
+      desiredReplicas: number;
+      currentMetrics: Array<{
+        type: string;
+        name?: string;
+        currentValue: number;
+        currentUtilization?: number;
+      }>;
+      labels: Record<string, string>;
+      createdAt: string;
+    }>>(`${API_BASE}/hpas${namespace ? `?namespace=${namespace}` : ''}`),
+    refetchInterval: 15000,
+  });
+}
+
+export function useDeleteHPA() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (namespace: string, name: string, callbacks?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+      mutation.mutate(
+        {
+          endpoint: '/hpas',
+          method: 'DELETE',
+          body: { namespace, name }
+        },
+        {
+          onSuccess: () => callbacks?.onSuccess?.(),
+          onError: (error) => callbacks?.onError?.(error),
+        }
+      );
+    },
+    isPending: mutation.isPending,
   };
 }
 

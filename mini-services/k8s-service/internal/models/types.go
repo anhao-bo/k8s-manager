@@ -169,6 +169,20 @@ type DeploymentInfo struct {
 
 // ==================== StatefulSet ====================
 
+// CreateStatefulSetRequest 创建StatefulSet请求
+type CreateStatefulSetRequest struct {
+        Namespace     string            `json:"namespace"`
+        Name          string            `json:"name" binding:"required"`
+        Image         string            `json:"image" binding:"required"`
+        Replicas      int               `json:"replicas"`
+        ContainerName string            `json:"containerName"`
+        ContainerPort int               `json:"containerPort"`
+        ServiceName   string            `json:"serviceName"`
+        StorageClass  string            `json:"storageClass"`
+        StorageSize   string            `json:"storageSize"`
+        Labels        map[string]string `json:"labels"`
+}
+
 // StatefulSetInfo StatefulSet信息
 type StatefulSetInfo struct {
         Name          string            `json:"name"`
@@ -181,6 +195,16 @@ type StatefulSetInfo struct {
 }
 
 // ==================== DaemonSet ====================
+
+// CreateDaemonSetRequest 创建DaemonSet请求
+type CreateDaemonSetRequest struct {
+        Namespace     string            `json:"namespace"`
+        Name          string            `json:"name" binding:"required"`
+        Image         string            `json:"image" binding:"required"`
+        ContainerName string            `json:"containerName"`
+        ContainerPort int               `json:"containerPort"`
+        Labels        map[string]string `json:"labels"`
+}
 
 // DaemonSetInfo DaemonSet信息
 type DaemonSetInfo struct {
@@ -196,18 +220,111 @@ type DaemonSetInfo struct {
 
 // ==================== Job ====================
 
+// CreateJobRequest 创建Job请求
+type CreateJobRequest struct {
+        Namespace     string            `json:"namespace"`
+        Name          string            `json:"name" binding:"required"`
+        Image         string            `json:"image" binding:"required"`
+        ContainerName string            `json:"containerName"`
+        Command       []string          `json:"command"`
+        Args          []string          `json:"args"`
+        Completions   int               `json:"completions"`
+        Parallelism   int               `json:"parallelism"`
+        BackoffLimit  int               `json:"backoffLimit"`
+        Labels        map[string]string `json:"labels"`
+}
+
 // JobInfo Job信息
 type JobInfo struct {
+        Name           string            `json:"name"`
+        Namespace      string            `json:"namespace"`
+        Completions    int32             `json:"completions"`
+        Succeeded      int32             `json:"succeeded"`
+        Parallelism    int32             `json:"parallelism"`
+        Status         string            `json:"status"`
+        StartTime      *time.Time        `json:"startTime,omitempty"`
+        CompletionTime *time.Time        `json:"completionTime,omitempty"`
+        Labels         map[string]string `json:"labels"`
+        CreatedAt      time.Time         `json:"createdAt"`
+}
+
+// ==================== CronJob ====================
+
+// CreateCronJobRequest 创建CronJob请求
+type CreateCronJobRequest struct {
+        Namespace     string            `json:"namespace"`
+        Name          string            `json:"name" binding:"required"`
+        Image         string            `json:"image" binding:"required"`
+        ContainerName string            `json:"containerName"`
+        Command       []string          `json:"command"`
+        Args          []string          `json:"args"`
+        Schedule      string            `json:"schedule" binding:"required"`
+        Suspend       bool              `json:"suspend"`
+        SuccessfulJobsHistoryLimit int  `json:"successfulJobsHistoryLimit"`
+        FailedJobsHistoryLimit     int  `json:"failedJobsHistoryLimit"`
+        Labels        map[string]string `json:"labels"`
+}
+
+// CronJobInfo CronJob信息
+type CronJobInfo struct {
+        Name                      string            `json:"name"`
+        Namespace                 string            `json:"namespace"`
+        Schedule                  string            `json:"schedule"`
+        Suspend                   bool              `json:"suspend"`
+        LastScheduleTime          *time.Time        `json:"lastScheduleTime,omitempty"`
+        ActiveJobs               int               `json:"activeJobs"`
+        LastSuccessfulJob        string            `json:"lastSuccessfulJob,omitempty"`
+        Labels                    map[string]string `json:"labels"`
+        CreatedAt                 time.Time         `json:"createdAt"`
+}
+
+// ==================== ReplicaSet ====================
+
+// ReplicaSetInfo ReplicaSet信息
+type ReplicaSetInfo struct {
         Name          string            `json:"name"`
         Namespace     string            `json:"namespace"`
-        Completions   int32             `json:"completions"`
-        Succeeded     int32             `json:"succeeded"`
-        Parallelism   int32             `json:"parallelism"`
-        Status        string            `json:"status"`
-        StartTime     *time.Time        `json:"startTime,omitempty"`
-        CompletionTime *time.Time       `json:"completionTime,omitempty"`
+        Replicas      int32             `json:"replicas"`
+        ReadyReplicas int32             `json:"readyReplicas"`
+        OwnerRef      *OwnerReference   `json:"ownerRef,omitempty"`
         Labels        map[string]string `json:"labels"`
         CreatedAt     time.Time         `json:"createdAt"`
+}
+
+// OwnerReference 所有者引用
+type OwnerReference struct {
+        Kind string `json:"kind"`
+        Name string `json:"name"`
+}
+
+// ==================== HPA ====================
+
+// HPAInfo HPA信息
+type HPAInfo struct {
+        Name              string            `json:"name"`
+        Namespace         string            `json:"namespace"`
+        ScaleTargetRef    ScaleTargetRef    `json:"scaleTargetRef"`
+        MinReplicas       int32             `json:"minReplicas"`
+        MaxReplicas       int32             `json:"maxReplicas"`
+        CurrentReplicas   int32             `json:"currentReplicas"`
+        DesiredReplicas   int32             `json:"desiredReplicas"`
+        CurrentMetrics    []MetricStatus    `json:"currentMetrics"`
+        Labels            map[string]string `json:"labels"`
+        CreatedAt         time.Time         `json:"createdAt"`
+}
+
+// ScaleTargetRef 缩放目标引用
+type ScaleTargetRef struct {
+        Kind string `json:"kind"`
+        Name string `json:"name"`
+}
+
+// MetricStatus 指标状态
+type MetricStatus struct {
+        Type               string  `json:"type"`
+        Name               string  `json:"name,omitempty"`
+        CurrentValue       float64 `json:"currentValue"`
+        CurrentUtilization *int32  `json:"currentUtilization,omitempty"`
 }
 
 // ==================== Service ====================

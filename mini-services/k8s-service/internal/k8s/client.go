@@ -15,6 +15,7 @@ import (
         networkingv1 "k8s.io/api/networking/v1"
         storagev1 "k8s.io/api/storage/v1"
         appsv1 "k8s.io/api/apps/v1"
+        autoscalingv2 "k8s.io/api/autoscaling/v2"
         batchv1 "k8s.io/api/batch/v1"
         rbacv1 "k8s.io/api/rbac/v1"
         metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -768,6 +769,97 @@ func (c *Client) GetStatefulSets(namespace string) ([]models.StatefulSetInfo, er
         return result, nil
 }
 
+// CreateStatefulSet 创建StatefulSet
+func (c *Client) CreateStatefulSet(req models.CreateStatefulSetRequest) (*models.StatefulSetInfo, error) {
+        ctx := context.Background()
+        ns := req.Namespace
+        if ns == "" {
+                ns = "default"
+        }
+
+        replicas := int32(1)
+        if req.Replicas > 0 {
+                replicas = int32(req.Replicas)
+        }
+
+        containerName := req.ContainerName
+        if containerName == "" {
+                containerName = req.Name
+        }
+
+        labels := req.Labels
+        if len(labels) == 0 {
+                labels = map[string]string{
+                        "app": req.Name,
+                }
+        }
+
+        // 构建容器
+        container := corev1.Container{
+                Name:  containerName,
+                Image: req.Image,
+        }
+
+        if req.ContainerPort > 0 {
+                container.Ports = []corev1.ContainerPort{
+                        {ContainerPort: int32(req.ContainerPort)},
+                }
+        }
+
+        serviceName := req.ServiceName
+        if serviceName == "" {
+                serviceName = req.Name + "-headless"
+        }
+
+        sts := &appsv1.StatefulSet{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      req.Name,
+                        Namespace: ns,
+                        Labels:    labels,
+                },
+                Spec: appsv1.StatefulSetSpec{
+                        Replicas:    &replicas,
+                        ServiceName: serviceName,
+                        Selector: &metav1.LabelSelector{
+                                MatchLabels: map[string]string{
+                                        "app": req.Name,
+                                },
+                        },
+                        Template: corev1.PodTemplateSpec{
+                                ObjectMeta: metav1.ObjectMeta{
+                                        Labels: map[string]string{
+                                                "app": req.Name,
+                                        },
+                                },
+                                Spec: corev1.PodSpec{
+                                        Containers: []corev1.Container{container},
+                                },
+                        },
+                },
+        }
+
+        created, err := c.Clientset.AppsV1().StatefulSets(ns).Create(ctx, sts, metav1.CreateOptions{})
+        if err != nil {
+                return nil, err
+        }
+
+        return &models.StatefulSetInfo{
+                Name:          created.Name,
+                Namespace:     created.Namespace,
+                Replicas:      *created.Spec.Replicas,
+                ReadyReplicas: created.Status.ReadyReplicas,
+                ServiceName:   created.Spec.ServiceName,
+                Labels:        created.Labels,
+                CreatedAt:     created.CreationTimestamp.Time,
+        }, nil
+}
+
+// DeleteStatefulSet 删除StatefulSet
+func (c *Client) DeleteStatefulSet(namespace, name string) error {
+        ctx := context.Background()
+        return c.Clientset.AppsV1().StatefulSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
 // ==================== DaemonSet操作 ====================
 
 // GetDaemonSets 获取DaemonSet列表
@@ -800,6 +892,86 @@ func (c *Client) GetDaemonSets(namespace string) ([]models.DaemonSetInfo, error)
                 result = append(result, info)
         }
         return result, nil
+}
+
+// CreateDaemonSet 创建DaemonSet
+func (c *Client) CreateDaemonSet(req models.CreateDaemonSetRequest) (*models.DaemonSetInfo, error) {
+        ctx := context.Background()
+        ns := req.Namespace
+        if ns == "" {
+                ns = "default"
+        }
+
+        containerName := req.ContainerName
+        if containerName == "" {
+                containerName = req.Name
+        }
+
+        labels := req.Labels
+        if len(labels) == 0 {
+                labels = map[string]string{
+                        "app": req.Name,
+                }
+        }
+
+        // 构建容器
+        container := corev1.Container{
+                Name:  containerName,
+                Image: req.Image,
+        }
+
+        if req.ContainerPort > 0 {
+                container.Ports = []corev1.ContainerPort{
+                        {ContainerPort: int32(req.ContainerPort)},
+                }
+        }
+
+        ds := &appsv1.DaemonSet{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      req.Name,
+                        Namespace: ns,
+                        Labels:    labels,
+                },
+                Spec: appsv1.DaemonSetSpec{
+                        Selector: &metav1.LabelSelector{
+                                MatchLabels: map[string]string{
+                                        "app": req.Name,
+                                },
+                        },
+                        Template: corev1.PodTemplateSpec{
+                                ObjectMeta: metav1.ObjectMeta{
+                                        Labels: map[string]string{
+                                                "app": req.Name,
+                                        },
+                                },
+                                Spec: corev1.PodSpec{
+                                        Containers: []corev1.Container{container},
+                                },
+                        },
+                },
+        }
+
+        created, err := c.Clientset.AppsV1().DaemonSets(ns).Create(ctx, ds, metav1.CreateOptions{})
+        if err != nil {
+                return nil, err
+        }
+
+        return &models.DaemonSetInfo{
+                Name:          created.Name,
+                Namespace:     created.Namespace,
+                DesiredNodes:  created.Status.DesiredNumberScheduled,
+                CurrentNodes:  created.Status.CurrentNumberScheduled,
+                ReadyNodes:    created.Status.NumberReady,
+                UpdatedNodes:  created.Status.UpdatedNumberScheduled,
+                Labels:        created.Labels,
+                CreatedAt:     created.CreationTimestamp.Time,
+        }, nil
+}
+
+// DeleteDaemonSet 删除DaemonSet
+func (c *Client) DeleteDaemonSet(namespace, name string) error {
+        ctx := context.Background()
+        return c.Clientset.AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ==================== Job操作 ====================
@@ -865,6 +1037,106 @@ func (c *Client) GetJobs(namespace string) ([]models.JobInfo, error) {
                 result = append(result, info)
         }
         return result, nil
+}
+
+// CreateJob 创建Job
+func (c *Client) CreateJob(req models.CreateJobRequest) (*models.JobInfo, error) {
+        ctx := context.Background()
+        ns := req.Namespace
+        if ns == "" {
+                ns = "default"
+        }
+
+        containerName := req.ContainerName
+        if containerName == "" {
+                containerName = req.Name
+        }
+
+        labels := req.Labels
+        if len(labels) == 0 {
+                labels = map[string]string{
+                        "app": req.Name,
+                }
+        }
+
+        // 构建容器
+        container := corev1.Container{
+                Name:  containerName,
+                Image: req.Image,
+        }
+
+        if len(req.Command) > 0 {
+                container.Command = req.Command
+        }
+        if len(req.Args) > 0 {
+                container.Args = req.Args
+        }
+
+        completions := int32(1)
+        if req.Completions > 0 {
+                completions = int32(req.Completions)
+        }
+        parallelism := int32(1)
+        if req.Parallelism > 0 {
+                parallelism = int32(req.Parallelism)
+        }
+        backoffLimit := int32(6)
+        if req.BackoffLimit > 0 {
+                backoffLimit = int32(req.BackoffLimit)
+        }
+
+        job := &batchv1.Job{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      req.Name,
+                        Namespace: ns,
+                        Labels:    labels,
+                },
+                Spec: batchv1.JobSpec{
+                        Completions:  &completions,
+                        Parallelism:  &parallelism,
+                        BackoffLimit: &backoffLimit,
+                        Template: corev1.PodTemplateSpec{
+                                ObjectMeta: metav1.ObjectMeta{
+                                        Labels: map[string]string{
+                                                "app": req.Name,
+                                        },
+                                },
+                                Spec: corev1.PodSpec{
+                                        RestartPolicy: corev1.RestartPolicyOnFailure,
+                                        Containers:    []corev1.Container{container},
+                                },
+                        },
+                },
+        }
+
+        created, err := c.Clientset.BatchV1().Jobs(ns).Create(ctx, job, metav1.CreateOptions{})
+        if err != nil {
+                return nil, err
+        }
+
+        status := "Pending"
+        if created.Spec.Completions != nil && created.Status.Succeeded >= *created.Spec.Completions {
+                status = "Completed"
+        } else if created.Status.Active > 0 {
+                status = "Running"
+        }
+
+        return &models.JobInfo{
+                Name:           created.Name,
+                Namespace:      created.Namespace,
+                Completions:    completions,
+                Succeeded:      created.Status.Succeeded,
+                Parallelism:    parallelism,
+                Status:         status,
+                Labels:         created.Labels,
+                CreatedAt:      created.CreationTimestamp.Time,
+        }, nil
+}
+
+// DeleteJob 删除Job
+func (c *Client) DeleteJob(namespace, name string) error {
+        ctx := context.Background()
+        return c.Clientset.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ==================== Service操作 ====================
@@ -1643,6 +1915,262 @@ func (c *Client) UpdatePodYaml(namespace, name, newYamlStr string) (*UpdatePodYa
                         Restarts:        0,
                 },
         }, nil
+}
+
+// ==================== CronJob操作 ====================
+
+// GetCronJobs 获取CronJob列表
+func (c *Client) GetCronJobs(namespace string) ([]models.CronJobInfo, error) {
+        ctx := context.Background()
+        var cronjobs *batchv1.CronJobList
+        var err error
+
+        if namespace != "" {
+                cronjobs, err = c.Clientset.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
+        } else {
+                cronjobs, err = c.Clientset.BatchV1().CronJobs("").List(ctx, metav1.ListOptions{})
+        }
+        if err != nil {
+                return nil, err
+        }
+
+        result := make([]models.CronJobInfo, 0, len(cronjobs.Items))
+        for _, cj := range cronjobs.Items {
+                info := models.CronJobInfo{
+                        Name:        cj.Name,
+                        Namespace:   cj.Namespace,
+                        Schedule:    cj.Spec.Schedule,
+                        Suspend:     cj.Spec.Suspend != nil && *cj.Spec.Suspend,
+                        ActiveJobs:  len(cj.Status.Active),
+                        Labels:      cj.Labels,
+                        CreatedAt:   cj.CreationTimestamp.Time,
+                }
+
+                if cj.Status.LastScheduleTime != nil {
+                        t := cj.Status.LastScheduleTime.Time
+                        info.LastScheduleTime = &t
+                }
+
+                result = append(result, info)
+        }
+        return result, nil
+}
+
+// CreateCronJob 创建CronJob
+func (c *Client) CreateCronJob(req models.CreateCronJobRequest) (*models.CronJobInfo, error) {
+        ctx := context.Background()
+        ns := req.Namespace
+        if ns == "" {
+                ns = "default"
+        }
+
+        containerName := req.ContainerName
+        if containerName == "" {
+                containerName = req.Name
+        }
+
+        labels := req.Labels
+        if len(labels) == 0 {
+                labels = map[string]string{
+                        "app": req.Name,
+                }
+        }
+
+        // 构建容器
+        container := corev1.Container{
+                Name:  containerName,
+                Image: req.Image,
+        }
+
+        if len(req.Command) > 0 {
+                container.Command = req.Command
+        }
+        if len(req.Args) > 0 {
+                container.Args = req.Args
+        }
+
+        successfulJobsHistoryLimit := int32(3)
+        if req.SuccessfulJobsHistoryLimit > 0 {
+                successfulJobsHistoryLimit = int32(req.SuccessfulJobsHistoryLimit)
+        }
+        failedJobsHistoryLimit := int32(1)
+        if req.FailedJobsHistoryLimit > 0 {
+                failedJobsHistoryLimit = int32(req.FailedJobsHistoryLimit)
+        }
+
+        cronjob := &batchv1.CronJob{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      req.Name,
+                        Namespace: ns,
+                        Labels:    labels,
+                },
+                Spec: batchv1.CronJobSpec{
+                        Schedule:                   req.Schedule,
+                        Suspend:                    &req.Suspend,
+                        SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
+                        FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
+                        JobTemplate: batchv1.JobTemplateSpec{
+                                Spec: batchv1.JobSpec{
+                                        Template: corev1.PodTemplateSpec{
+                                                ObjectMeta: metav1.ObjectMeta{
+                                                        Labels: map[string]string{
+                                                                "app": req.Name,
+                                                        },
+                                                },
+                                                Spec: corev1.PodSpec{
+                                                        RestartPolicy: corev1.RestartPolicyOnFailure,
+                                                        Containers:    []corev1.Container{container},
+                                                },
+                                        },
+                                },
+                        },
+                },
+        }
+
+        created, err := c.Clientset.BatchV1().CronJobs(ns).Create(ctx, cronjob, metav1.CreateOptions{})
+        if err != nil {
+                return nil, err
+        }
+
+        return &models.CronJobInfo{
+                Name:        created.Name,
+                Namespace:   created.Namespace,
+                Schedule:    created.Spec.Schedule,
+                Suspend:     created.Spec.Suspend != nil && *created.Spec.Suspend,
+                ActiveJobs:  len(created.Status.Active),
+                Labels:      created.Labels,
+                CreatedAt:   created.CreationTimestamp.Time,
+        }, nil
+}
+
+// DeleteCronJob 删除CronJob
+func (c *Client) DeleteCronJob(namespace, name string) error {
+        ctx := context.Background()
+        return c.Clientset.BatchV1().CronJobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// ==================== ReplicaSet操作 ====================
+
+// GetReplicaSets 获取ReplicaSet列表
+func (c *Client) GetReplicaSets(namespace string) ([]models.ReplicaSetInfo, error) {
+        ctx := context.Background()
+        var rss *appsv1.ReplicaSetList
+        var err error
+
+        if namespace != "" {
+                rss, err = c.Clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+        } else {
+                rss, err = c.Clientset.AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
+        }
+        if err != nil {
+                return nil, err
+        }
+
+        result := make([]models.ReplicaSetInfo, 0, len(rss.Items))
+        for _, rs := range rss.Items {
+                info := models.ReplicaSetInfo{
+                        Name:          rs.Name,
+                        Namespace:     rs.Namespace,
+                        Replicas:      *rs.Spec.Replicas,
+                        ReadyReplicas: rs.Status.ReadyReplicas,
+                        Labels:        rs.Labels,
+                        CreatedAt:     rs.CreationTimestamp.Time,
+                }
+
+                // 获取所有者引用
+                if len(rs.OwnerReferences) > 0 {
+                        owner := rs.OwnerReferences[0]
+                        info.OwnerRef = &models.OwnerReference{
+                                Kind: owner.Kind,
+                                Name: owner.Name,
+                        }
+                }
+
+                result = append(result, info)
+        }
+        return result, nil
+}
+
+// DeleteReplicaSet 删除ReplicaSet
+func (c *Client) DeleteReplicaSet(namespace, name string) error {
+        ctx := context.Background()
+        return c.Clientset.AppsV1().ReplicaSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// ==================== HPA操作 ====================
+
+// GetHPAs 获取HPA列表
+func (c *Client) GetHPAs(namespace string) ([]models.HPAInfo, error) {
+        ctx := context.Background()
+        var hpas *autoscalingv2.HorizontalPodAutoscalerList
+        var err error
+
+        if namespace != "" {
+                hpas, err = c.Clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).List(ctx, metav1.ListOptions{})
+        } else {
+                hpas, err = c.Clientset.AutoscalingV2().HorizontalPodAutoscalers("").List(ctx, metav1.ListOptions{})
+        }
+        if err != nil {
+                return nil, err
+        }
+
+        result := make([]models.HPAInfo, 0, len(hpas.Items))
+        for _, hpa := range hpas.Items {
+                minReplicas := int32(1)
+                if hpa.Spec.MinReplicas != nil {
+                        minReplicas = *hpa.Spec.MinReplicas
+                }
+
+                info := models.HPAInfo{
+                        Name:            hpa.Name,
+                        Namespace:       hpa.Namespace,
+                        MinReplicas:     minReplicas,
+                        MaxReplicas:     hpa.Spec.MaxReplicas,
+                        CurrentReplicas: hpa.Status.CurrentReplicas,
+                        DesiredReplicas: hpa.Status.DesiredReplicas,
+                        ScaleTargetRef: models.ScaleTargetRef{
+                                Kind: hpa.Spec.ScaleTargetRef.Kind,
+                                Name: hpa.Spec.ScaleTargetRef.Name,
+                        },
+                        CurrentMetrics: make([]models.MetricStatus, 0),
+                        Labels:         hpa.Labels,
+                        CreatedAt:      hpa.CreationTimestamp.Time,
+                }
+
+                // 解析当前指标
+                for _, metric := range hpa.Status.CurrentMetrics {
+                        ms := models.MetricStatus{
+                                Type: string(metric.Type),
+                        }
+                        switch metric.Type {
+                        case autoscalingv2.ResourceMetricSourceType:
+                                ms.Name = string(metric.Resource.Name)
+                                if metric.Resource.Current.AverageUtilization != nil {
+                                        ms.CurrentUtilization = metric.Resource.Current.AverageUtilization
+                                }
+                                ms.CurrentValue = float64(metric.Resource.Current.AverageValue.MilliValue()) / 1000
+                        case autoscalingv2.PodsMetricSourceType:
+                                ms.Name = metric.Pods.Metric.Name
+                                ms.CurrentValue = float64(metric.Pods.Current.AverageValue.MilliValue()) / 1000
+                        case autoscalingv2.ContainerResourceMetricSourceType:
+                                ms.Name = string(metric.ContainerResource.Name)
+                                ms.CurrentValue = float64(metric.ContainerResource.Current.AverageValue.MilliValue()) / 1000
+                        case autoscalingv2.ExternalMetricSourceType:
+                                ms.Name = metric.External.Metric.Name
+                                ms.CurrentValue = float64(metric.External.Current.Value.MilliValue()) / 1000
+                        }
+                        info.CurrentMetrics = append(info.CurrentMetrics, ms)
+                }
+
+                result = append(result, info)
+        }
+        return result, nil
+}
+
+// DeleteHPA 删除HPA
+func (c *Client) DeleteHPA(namespace, name string) error {
+        ctx := context.Background()
+        return c.Clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // 确保导入被使用

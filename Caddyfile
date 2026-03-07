@@ -1,0 +1,40 @@
+:81 {
+        # WebSocket 路由 - 代理到 ws-proxy 服务 (端口 8081)
+        @websocket {
+                path /api/ws/*
+                query XTransformPort=*
+        }
+        handle @websocket {
+                reverse_proxy localhost:8081 {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                        flush_interval -1s
+                }
+        }
+
+        # API 代理路由
+        @api_with_port {
+                path /api/*
+                query XTransformPort=*
+        }
+        handle @api_with_port {
+                reverse_proxy localhost:{query.XTransformPort} {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+
+        # 默认路由到 Next.js
+        handle {
+                reverse_proxy localhost:3000 {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+}

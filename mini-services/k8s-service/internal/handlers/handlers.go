@@ -1324,3 +1324,83 @@ func (h *Handler) GetMiddlewareStatus(c *gin.Context) {
         }
         c.JSON(http.StatusOK, overview)
 }
+
+// ==================== 通用资源 YAML 操作 ====================
+
+// GetResourceYaml 获取资源 YAML
+func (h *Handler) GetResourceYaml(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        resourceType := c.Param("type")
+        namespace := c.Query("namespace")
+        name := c.Query("name")
+
+        if namespace == "" || name == "" {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   "namespace and name are required",
+                })
+                return
+        }
+
+        yaml, err := h.Client.GetResourceYaml(resourceType, namespace, name)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+                "success": true,
+                "yaml":    yaml,
+        })
+}
+
+// UpdateResourceYaml 更新资源 YAML
+func (h *Handler) UpdateResourceYaml(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        resourceType := c.Param("type")
+        
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+                Yaml      string `json:"yaml" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        updatedYaml, err := h.Client.UpdateResourceYaml(resourceType, req.Namespace, req.Name, req.Yaml)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+                "success": true,
+                "message": resourceType + " 已更新",
+                "yaml":    updatedYaml,
+        })
+}

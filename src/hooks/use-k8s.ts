@@ -958,6 +958,46 @@ export function useUpdatePodYaml() {
   });
 }
 
+// 通用资源 YAML 获取 hook
+export function useResourceYaml(resourceType: string, namespace: string, name: string) {
+  return useQuery({
+    queryKey: ['k8s', 'resource-yaml', resourceType, namespace, name],
+    queryFn: async () => {
+      const params = new URLSearchParams({ namespace, name });
+      const response = await fetch(`${API_BASE}/resources/${resourceType}/yaml?${params.toString()}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || error.message || 'Request failed');
+      }
+      return response.json();
+    },
+    enabled: !!namespace && !!name,
+  });
+}
+
+// 通用资源 YAML 更新 hook
+export function useUpdateResourceYaml(resourceType: string) {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (params: { namespace: string; name: string; yaml: string }) => {
+      const response = await fetch(`${API_BASE}/resources/${resourceType}/yaml`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || error.message || 'Request failed');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['k8s', resourceType] });
+    },
+  });
+}
+
 // ==================== RBAC ====================
 
 export function useServiceAccounts(namespace?: string) {

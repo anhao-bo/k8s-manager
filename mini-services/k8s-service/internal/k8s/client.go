@@ -2183,6 +2183,217 @@ func (c *Client) DeleteHPA(namespace, name string) error {
         return c.Clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
+// ==================== 通用资源 YAML 操作 ====================
+
+// GetResourceYaml 获取任意资源的 YAML
+func (c *Client) GetResourceYaml(resourceType, namespace, name string) (string, error) {
+        ctx := context.Background()
+
+        switch resourceType {
+        case "deployments":
+                obj, err := c.Clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "statefulsets":
+                obj, err := c.Clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "daemonsets":
+                obj, err := c.Clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "jobs":
+                obj, err := c.Clientset.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "cronjobs":
+                obj, err := c.Clientset.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "replicasets":
+                obj, err := c.Clientset.AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "hpas":
+                obj, err := c.Clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "services":
+                obj, err := c.Clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "configmaps":
+                obj, err := c.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        case "secrets":
+                obj, err := c.Clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+                if err != nil {
+                        return "", err
+                }
+                return toYaml(obj)
+
+        default:
+                return "", fmt.Errorf("unsupported resource type: %s", resourceType)
+        }
+}
+
+// UpdateResourceYaml 更新任意资源的 YAML
+func (c *Client) UpdateResourceYaml(resourceType, namespace, name, yamlStr string) (string, error) {
+        ctx := context.Background()
+
+        switch resourceType {
+        case "deployments":
+                var obj appsv1.Deployment
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.AppsV1().Deployments(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update deployment: %w", err)
+                }
+                return toYaml(updated)
+
+        case "statefulsets":
+                var obj appsv1.StatefulSet
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.AppsV1().StatefulSets(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update statefulset: %w", err)
+                }
+                return toYaml(updated)
+
+        case "daemonsets":
+                var obj appsv1.DaemonSet
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.AppsV1().DaemonSets(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update daemonset: %w", err)
+                }
+                return toYaml(updated)
+
+        case "jobs":
+                var obj batchv1.Job
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.BatchV1().Jobs(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update job: %w", err)
+                }
+                return toYaml(updated)
+
+        case "cronjobs":
+                var obj batchv1.CronJob
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.BatchV1().CronJobs(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update cronjob: %w", err)
+                }
+                return toYaml(updated)
+
+        case "replicasets":
+                var obj appsv1.ReplicaSet
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.AppsV1().ReplicaSets(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update replicaset: %w", err)
+                }
+                return toYaml(updated)
+
+        case "hpas":
+                var obj autoscalingv2.HorizontalPodAutoscaler
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update hpa: %w", err)
+                }
+                return toYaml(updated)
+
+        case "services":
+                var obj corev1.Service
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.CoreV1().Services(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update service: %w", err)
+                }
+                return toYaml(updated)
+
+        case "configmaps":
+                var obj corev1.ConfigMap
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.CoreV1().ConfigMaps(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update configmap: %w", err)
+                }
+                return toYaml(updated)
+
+        case "secrets":
+                var obj corev1.Secret
+                if err := yaml.Unmarshal([]byte(yamlStr), &obj); err != nil {
+                        return "", fmt.Errorf("failed to parse yaml: %w", err)
+                }
+                updated, err := c.Clientset.CoreV1().Secrets(namespace).Update(ctx, &obj, metav1.UpdateOptions{})
+                if err != nil {
+                        return "", fmt.Errorf("failed to update secret: %w", err)
+                }
+                return toYaml(updated)
+
+        default:
+                return "", fmt.Errorf("unsupported resource type: %s", resourceType)
+        }
+}
+
+// toYaml 辅助函数，将对象转换为 YAML
+func toYaml(obj interface{}) (string, error) {
+        data, err := yaml.Marshal(obj)
+        if err != nil {
+                return "", err
+        }
+        return string(data), nil
+}
+
 // 确保导入被使用
 var _ = storagev1.SchemeGroupVersion
 var _ = parseCPU

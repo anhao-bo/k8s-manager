@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Search,
   Plus,
@@ -43,8 +44,11 @@ import {
   RotateCcw,
   Eye,
   Loader2,
+  Code,
+  Save,
+  AlertCircle,
 } from "lucide-react";
-import { useDeployments, useScaleDeployment, useRestartDeployment, useCreateDeployment, useDeleteDeployment, useNamespaces } from "@/hooks/use-k8s";
+import { useDeployments, useScaleDeployment, useRestartDeployment, useCreateDeployment, useDeleteDeployment, useNamespaces, useResourceYaml, useUpdateResourceYaml } from "@/hooks/use-k8s";
 import { useToast } from "@/hooks/use-toast";
 
 interface DeploymentsPageProps {
@@ -97,6 +101,9 @@ function LoadingSkeleton() {
 export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isYamlOpen, setIsYamlOpen] = useState(false);
+  const [selectedDeployment, setSelectedDeployment] = useState<{namespace: string; name: string} | null>(null);
+  const [yamlContent, setYamlContent] = useState("");
   const [form, setForm] = useState({
     name: "",
     image: "",
@@ -200,6 +207,12 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
         },
       });
     }
+  };
+
+  // Handle open YAML editor
+  const handleOpenYaml = async (deployNamespace: string, deployName: string) => {
+    setSelectedDeployment({ namespace: deployNamespace, name: deployName });
+    setIsYamlOpen(true);
   };
 
   if (isLoading) {
@@ -403,11 +416,17 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
                       <DropdownMenuContent align="end" className="bg-slate-900 border-slate-700">
                         <DropdownMenuLabel className="text-slate-400">操作</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-slate-700" />
-                        <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
+                        <DropdownMenuItem 
+                          className="text-slate-300 hover:text-white focus:bg-slate-800"
+                          onClick={() => handleOpenYaml(deploy.namespace, deploy.name)}
+                        >
                           <Eye className="h-4 w-4 mr-2" /> 查看详情
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
-                          <Edit className="h-4 w-4 mr-2" /> 编辑
+                        <DropdownMenuItem 
+                          className="text-slate-300 hover:text-white focus:bg-slate-800"
+                          onClick={() => handleOpenYaml(deploy.namespace, deploy.name)}
+                        >
+                          <Edit className="h-4 w-4 mr-2" /> 编辑 YAML
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           className="text-slate-300 hover:text-white focus:bg-slate-800"
@@ -442,6 +461,104 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
           </div>
         )}
       </div>
+
+      {/* YAML 编辑对话框 */}
+      <Dialog open={isYamlOpen} onOpenChange={setIsYamlOpen}>
+        <DialogContent className="max-w-5xl h-[700px] bg-slate-900 border-slate-700 flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Code className="h-5 w-5 text-sky-400" />
+              编辑 Deployment YAML - {selectedDeployment?.name}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              命名空间: {selectedDeployment?.namespace}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedDeployment && (
+            <DeploymentYamlEditor 
+              namespace={selectedDeployment.namespace} 
+              name={selectedDeployment.name}
+              onClose={() => setIsYamlOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Deployment YAML Editor Component
+function DeploymentYamlEditor({ namespace, name, onClose }: { namespace: string; name: string; onClose: () => void }) {
+  const { data, isLoading, error } = useResourceYaml("deployments", namespace, name);
+  const updateYaml = useUpdateResourceYaml("deployments");
+  const [yamlContent, setYamlContent] = useState("");
+  const { toast } = useToast();
+
+  // 当数据加载完成后设置 yaml 内容
+  React.useEffect(() => {
+    if (data?.yaml) {
+      setYamlContent(data.yaml);
+    }
+  }, [data]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full flex-1">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-rose-400 flex items-center justify-center h-full flex-1">
+        <AlertCircle className="h-5 w-5 inline mr-2" />
+        加载 YAML 失败: {error instanceof Error ? error.message : "未知错误"}
+      </div>
+    );
+  }
+
+  const handleSave = () => {
+    updateYaml.mutate(
+      { namespace, name, yaml: yamlContent },
+      {
+        onSuccess: () => {
+          toast({ title: "保存成功", description: `Deployment ${name} 已更新` });
+          onClose();
+        },
+        onError: (error) => {
+          toast({ title: "保存失败", description: error.message, variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex-1 overflow-auto mb-4">
+        <Textarea
+          value={yamlContent}
+          onChange={(e) => setYamlContent(e.target.value)}
+          className="h-full min-h-[500px] bg-slate-950 border-slate-700 font-mono text-sm text-slate-300 resize-none"
+          spellCheck={false}
+        />
+      </div>
+      <div className="text-xs text-slate-500 mb-2">
+        注意：修改 YAML 后保存将更新 Deployment 配置。
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onClick={onClose} className="text-slate-300">
+          取消
+        </Button>
+        <Button
+          onClick={handleSave}
+          className="bg-sky-500 hover:bg-sky-600"
+          disabled={updateYaml.isPending}
+        >
+          {updateYaml.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+          保存
+        </Button>
+      </DialogFooter>
     </div>
   );
 }

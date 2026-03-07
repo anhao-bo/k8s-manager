@@ -130,6 +130,10 @@ func SetupRouter(h *handlers.Handler) *gin.Engine {
 
                 // 中间件状态
                 api.GET("/middleware/status", h.GetMiddlewareStatus)
+
+                // 通用资源 YAML 操作
+                api.GET("/resources/:type/yaml", h.GetResourceYaml)
+                api.PUT("/resources/:type/yaml", h.UpdateResourceYaml)
         }
 
         // 健康检查

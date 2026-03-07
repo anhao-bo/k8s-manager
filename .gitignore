@@ -38,3 +38,4 @@ coverage/
 
 # Prisma
 db/*.db
+kind

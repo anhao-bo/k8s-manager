@@ -41,13 +41,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 创建新的 FormData 发送到后端
-    const backendFormData = new FormData();
-    backendFormData.append('kubeconfig', file);
+    // 读取文件内容为 Buffer
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    
+    // 使用 Node.js 原生方式发送 multipart/form-data
+    // 创建 boundary
+    const boundary = '----FormBoundary' + Math.random().toString(36).substring(2);
+    
+    // 构建 multipart/form-data body
+    const bodyParts = [
+      `--${boundary}`,
+      `Content-Disposition: form-data; name="kubeconfig"; filename="${file.name}"`,
+      `Content-Type: application/octet-stream`,
+      '',
+      fileBuffer.toString('binary'),
+      `--${boundary}--`,
+    ];
+    
+    const requestBody = bodyParts.join('\r\n');
 
     const response = await fetch(`${GO_API_URL}/api/kubeconfig/upload`, {
       method: 'POST',
-      body: backendFormData,
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      },
+      body: requestBody,
     });
 
     const text = await response.text();

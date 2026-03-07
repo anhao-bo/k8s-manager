@@ -19,9 +19,7 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
-  RefreshCw,
 } from "lucide-react";
-import { getK8sServicePort } from "@/lib/api-config";
 
 interface KubeconfigUploadProps {
   open: boolean;
@@ -97,11 +95,11 @@ export function KubeconfigUpload({
     setResult(null);
 
     try {
-      const port = getK8sServicePort();
       const formData = new FormData();
       formData.append("kubeconfig", file);
 
-      const response = await fetch(`/api/kubeconfig/upload?XTransformPort=${port}`, {
+      // 发送到 Next.js API 路由，由 Next.js 转发到后端 Go 服务
+      const response = await fetch("/api/kubeconfig", {
         method: "POST",
         body: formData,
       });

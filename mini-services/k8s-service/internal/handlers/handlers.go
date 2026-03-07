@@ -1,8 +1,12 @@
 package handlers
 
 import (
+        "io"
         "net/http"
+        "os"
+        "path/filepath"
         "strconv"
+        "sync"
 
         "k8s-service/internal/k8s"
         "k8s-service/internal/models"
@@ -13,11 +17,139 @@ import (
 // Handler 处理器
 type Handler struct {
         Client *k8s.Client
+        mu     sync.RWMutex
 }
 
 // NewHandler 创建处理器
 func NewHandler(client *k8s.Client) *Handler {
         return &Handler{Client: client}
+}
+
+// SetClient 设置客户端 (用于动态更新 kubeconfig)
+func (h *Handler) SetClient(client *k8s.Client) {
+        h.mu.Lock()
+        defer h.mu.Unlock()
+        h.Client = client
+}
+
+// GetClient 获取客户端
+func (h *Handler) GetClient() *k8s.Client {
+        h.mu.RLock()
+        defer h.mu.RUnlock()
+        return h.Client
+}
+
+// ==================== Kubeconfig 上传 ====================
+
+// UploadKubeconfig 上传 kubeconfig 文件
+func (h *Handler) UploadKubeconfig(c *gin.Context) {
+        // 获取上传的文件
+        file, header, err := c.Request.FormFile("kubeconfig")
+        if err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   "请上传 kubeconfig 文件: " + err.Error(),
+                })
+                return
+        }
+        defer file.Close()
+
+        // 读取文件内容
+        content, err := io.ReadAll(file)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "读取文件失败: " + err.Error(),
+                })
+                return
+        }
+
+        // 验证文件内容不为空
+        if len(content) == 0 {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   "kubeconfig 文件内容为空",
+                })
+                return
+        }
+
+        // 保存到临时文件
+        kubeconfigDir := ".kube"
+        if err := os.MkdirAll(kubeconfigDir, 0755); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "创建目录失败: " + err.Error(),
+                })
+                return
+        }
+
+        kubeconfigPath := filepath.Join(kubeconfigDir, "config")
+        if err := os.WriteFile(kubeconfigPath, content, 0600); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "保存文件失败: " + err.Error(),
+                })
+                return
+        }
+
+        // 创建新的 K8s 客户端
+        newClient, err := k8s.NewClient(kubeconfigPath, false)
+        if err != nil {
+                c.JSON(http.StatusOK, gin.H{
+                        "success": false,
+                        "error":   "创建 Kubernetes 客户端失败: " + err.Error(),
+                        "hint":    "请检查 kubeconfig 文件格式是否正确",
+                })
+                return
+        }
+
+        // 测试连接
+        info, err := newClient.TestConnection()
+        if err != nil {
+                c.JSON(http.StatusOK, gin.H{
+                        "success": false,
+                        "error":   "连接 Kubernetes 集群失败: " + err.Error(),
+                        "hint":    "请检查 kubeconfig 配置或确保集群可访问",
+                })
+                return
+        }
+
+        // 更新客户端
+        h.SetClient(newClient)
+
+        c.JSON(http.StatusOK, gin.H{
+                "success":  true,
+                "message":  "kubeconfig 上传成功",
+                "filename": header.Filename,
+                "cluster": gin.H{
+                        "version":  info.Version,
+                        "platform": info.Platform,
+                },
+        })
+}
+
+// GetKubeconfigStatus 获取 kubeconfig 状态
+func (h *Handler) GetKubeconfigStatus(c *gin.Context) {
+        kubeconfigPath := filepath.Join(".kube", "config")
+
+        // 检查文件是否存在
+        stat, err := os.Stat(kubeconfigPath)
+        if err != nil {
+                c.JSON(http.StatusOK, gin.H{
+                        "exists":   false,
+                        "message":  "未找到 kubeconfig 文件，请上传",
+                        "hint":     "点击上传按钮选择 kubeconfig 文件",
+                })
+                return
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+                "exists":     true,
+                "path":       kubeconfigPath,
+                "size":       stat.Size(),
+                "modifiedAt": stat.ModTime().Format("2006-01-02 15:04:05"),
+                "message":    "kubeconfig 文件已配置",
+        })
 }
 
 // ==================== 集群信息 ====================

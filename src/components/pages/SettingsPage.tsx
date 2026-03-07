@@ -25,7 +25,11 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
+  FileText,
+  Cloud,
+  Loader2,
 } from "lucide-react";
+import { KubeconfigUpload } from "@/components/ui/KubeconfigUpload";
 
 // 预设主题配色方案
 const themePresets = [
@@ -109,12 +113,9 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [showLogoDialog, setShowLogoDialog] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showKubeconfigDialog, setShowKubeconfigDialog] = useState(false);
+  const [kubeconfigStatus, setKubeconfigStatus] = useState<{exists: boolean; message: string; path?: string} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // 加载配置
-  useEffect(() => {
-    loadConfig();
-  }, []);
 
   const loadConfig = async () => {
     try {
@@ -250,6 +251,18 @@ export default function SettingsPage() {
     }
   };
 
+  // 加载 kubeconfig 状态
+  const loadKubeconfigStatus = async () => {
+    try {
+      const res = await fetch("/api/kubeconfig");
+      const data = await res.json();
+      setKubeconfigStatus(data);
+    } catch (error) {
+      console.error("加载 kubeconfig 状态失败:", error);
+      setKubeconfigStatus({ exists: false, message: "无法获取状态" });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -287,6 +300,7 @@ export default function SettingsPage() {
         <div className="flex gap-6">
           {[
             { id: "appearance", label: "外观设置", icon: Palette },
+            { id: "cluster", label: "集群配置", icon: Cloud },
             { id: "general", label: "基础配置", icon: Settings },
             { id: "about", label: "关于系统", icon: Monitor },
           ].map((tab) => (
@@ -495,6 +509,108 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {activeTab === "cluster" && (
+        <div className="grid grid-cols-2 gap-6">
+          {/* Kubeconfig 配置 */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-sky-400" />
+              Kubeconfig 配置
+            </h3>
+            <div className="space-y-4">
+              {/* 当前状态 */}
+              <div className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-lg">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                  kubeconfigStatus?.exists ? "bg-emerald-500/20" : "bg-amber-500/20"
+                }`}>
+                  {kubeconfigStatus?.exists ? (
+                    <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                  ) : (
+                    <AlertCircle className="h-6 w-6 text-amber-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-white font-medium">
+                    {kubeconfigStatus?.exists ? "已配置" : "未配置"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {kubeconfigStatus?.message || "加载中..."}
+                  </p>
+                </div>
+                <Button
+                  className="bg-sky-500 hover:bg-sky-600"
+                  onClick={() => setShowKubeconfigDialog(true)}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {kubeconfigStatus?.exists ? "更换配置" : "上传配置"}
+                </Button>
+              </div>
+
+              {/* 说明信息 */}
+              <div className="text-xs text-slate-500 space-y-2 p-4 bg-slate-800/30 rounded-lg">
+                <p className="font-medium text-slate-400">说明：</p>
+                <p>• Kubeconfig 文件用于连接 Kubernetes 集群</p>
+                <p>• 通常位于 ~/.kube/config 目录</p>
+                <p>• 上传后将自动验证并连接集群</p>
+                <p>• 支持多集群配置</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 集群连接信息 */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-purple-400" />
+              集群连接
+            </h3>
+            <div className="space-y-4">
+              {/* 连接状态 */}
+              <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg">
+                <div>
+                  <p className="text-white font-medium">连接状态</p>
+                  <p className="text-xs text-slate-500 mt-1">当前集群连接状态</p>
+                </div>
+                <Badge className={`${
+                  kubeconfigStatus?.exists 
+                    ? "bg-emerald-500/20 text-emerald-400" 
+                    : "bg-slate-700 text-slate-400"
+                }`}>
+                  {kubeconfigStatus?.exists ? "已连接" : "未连接"}
+                </Badge>
+              </div>
+
+              {/* 文件信息 */}
+              {kubeconfigStatus?.exists && kubeconfigStatus.path && (
+                <div className="p-4 bg-slate-800/50 rounded-lg">
+                  <p className="text-xs text-slate-500 mb-2">配置文件路径</p>
+                  <p className="text-sm text-white font-mono">{kubeconfigStatus.path}</p>
+                </div>
+              )}
+
+              {/* 快速操作 */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-slate-700 text-slate-300"
+                  onClick={loadKubeconfigStatus}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  刷新状态
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 border-slate-700 text-slate-300"
+                  onClick={() => setShowKubeconfigDialog(true)}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  重新上传
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === "general" && (
         <div className="grid grid-cols-2 gap-6">
           {/* 基础信息 */}
@@ -659,6 +775,15 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Kubeconfig 上传对话框 */}
+      <KubeconfigUpload
+        open={showKubeconfigDialog}
+        onOpenChange={setShowKubeconfigDialog}
+        onUploadSuccess={() => {
+          loadKubeconfigStatus();
+        }}
+      />
     </div>
   );
 }

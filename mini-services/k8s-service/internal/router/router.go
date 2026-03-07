@@ -23,6 +23,10 @@ func SetupRouter(h *handlers.Handler) *gin.Engine {
         // API路由组
         api := r.Group("/api")
         {
+                // Kubeconfig 配置
+                api.POST("/kubeconfig/upload", h.UploadKubeconfig)
+                api.GET("/kubeconfig/status", h.GetKubeconfigStatus)
+
                 // 集群状态
                 api.GET("/status", h.GetStatus)
                 api.GET("/overview", h.GetOverview)

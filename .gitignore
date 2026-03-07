@@ -1,51 +1,40 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# 依赖
+node_modules/
+.pnp
+.pnp.js
 
-# dependencies
-node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# 编译产物
+mini-services/k8s-service/k8s-service
+mini-services/k8s-service/kubectl
+kubectl
 
-# testing
-/coverage
+# 下载文件
+download/
+*.tar.gz
 
-# next.js
-/.next/
-/out/
+# 日志
+*.log
 
-# production
-/build
+# 环境变量
+.env
+.env.local
 
-# misc
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+# Next.js
+.next/
+out/
 
-# env files (can opt-in for committing if needed)
-.env*
+# 测试
+coverage/
 
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-local-*
-.claude
-.z-ai-config
-dev.log
-test
-prompt
-
-server.log
-# Skills directory
-/skills/
+# Prisma
+db/*.db

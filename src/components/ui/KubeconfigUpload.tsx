@@ -54,15 +54,15 @@ export function KubeconfigUpload({
 
   const handleFileSelect = (selectedFile: File) => {
     if (selectedFile) {
-      // 验证文件类型
-      const validTypes = ["text/yaml", "text/plain", "application/octet-stream"];
-      const validExtensions = [".kubeconfig", ".yaml", ".yml", ".config", ""];
-      const ext = selectedFile.name.substring(selectedFile.name.lastIndexOf("."));
+      // kubeconfig 文件可以是任意文件名，通常名为 "config"（无扩展名）
+      // 也支持 .yaml, .yml, .kubeconfig, .conf 等扩展名
+      // 主要验证文件大小和基本格式
+      const maxSize = 10 * 1024 * 1024; // 10MB
       
-      if (!validExtensions.includes(ext) && !validTypes.includes(selectedFile.type)) {
+      if (selectedFile.size > maxSize) {
         setResult({
           success: false,
-          error: "请上传有效的 kubeconfig 文件（.yaml, .yml, .kubeconfig 或无扩展名）",
+          error: "文件太大，请上传小于 10MB 的 kubeconfig 文件",
         });
         return;
       }
@@ -166,7 +166,8 @@ export function KubeconfigUpload({
                 const selectedFile = e.target.files?.[0];
                 if (selectedFile) handleFileSelect(selectedFile);
               }}
-              accept=".yaml,.yml,.kubeconfig,.config"
+            // 不限制文件类型，允许选择任何文件名（包括无扩展名的 config 文件）
+            // 后端会验证文件内容是否为有效的 kubeconfig
             />
 
             {file ? (
@@ -207,8 +208,10 @@ export function KubeconfigUpload({
 
           {/* 提示信息 */}
           <div className="text-xs text-slate-500 space-y-1">
-            <p>• 支持标准 kubeconfig 格式（YAML）</p>
-            <p>• 文件通常位于 ~/.kube/config</p>
+            <p>• kubeconfig 文件是 <span className="text-sky-400">YAML 格式</span>的配置文件</p>
+            <p>• 文件名通常为 <span className="text-sky-400">config</span>（无扩展名）</p>
+            <p>• 标准位置：<code className="text-sky-400">~/.kube/config</code></p>
+            <p>• 也支持 <span className="text-sky-400">.yaml, .yml, .kubeconfig</span> 等扩展名</p>
             <p>• 上传后将自动连接集群</p>
           </div>
 

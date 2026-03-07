@@ -3,10 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 // API 基础地址
 const API_BASE = '/api';
 
+// 后端服务端口 - 从环境变量读取，默认 8080
+const K8S_SERVICE_PORT = process.env.NEXT_PUBLIC_K8S_SERVICE_PORT || '8080';
+
 // 通用 fetch 函数
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
   const urlObj = new URL(url, window.location.origin);
-  urlObj.searchParams.set('XTransformPort', '8080');
+  urlObj.searchParams.set('XTransformPort', K8S_SERVICE_PORT);
 
   const response = await fetch(urlObj.toString(), options);
   if (!response.ok) {

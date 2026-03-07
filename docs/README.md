@@ -98,6 +98,27 @@ KubeNext 是一个功能完整的 Kubernetes 管理平台，提供：
 - kubectl (可选，用于调试)
 - Kubernetes 集群 (k3s/minikube/kind)
 
+### 端口配置
+
+项目支持通过环境变量自定义端口：
+
+```bash
+# .env 文件配置
+
+# 后端 Go API 服务端口 (默认: 8080)
+K8S_SERVICE_PORT=8080
+
+# 客户端可访问的端口配置
+NEXT_PUBLIC_K8S_SERVICE_PORT=8080
+```
+
+| 环境变量 | 说明 | 默认值 |
+|---------|------|--------|
+| `K8S_SERVICE_PORT` | 后端服务端口 | 8080 |
+| `NEXT_PUBLIC_K8S_SERVICE_PORT` | 前端访问的后端端口 | 8080 |
+| `PORT` | 后端服务监听端口 | 8080 |
+| `HOST` | 后端服务监听地址 | 0.0.0.0 |
+
 ### 安装步骤
 
 ```bash
@@ -117,11 +138,16 @@ cd ../..
 # 4. 配置 kubeconfig
 # 将 kubeconfig 文件放到 mini-services/k8s-service/.kube/config
 
-# 5. 启动后端服务
-cd mini-services/k8s-service
-./k8s-service &
+# 5. 配置环境变量 (可选)
+# 复制 .env.example 到 .env 并修改端口
+cp .env.example .env
 
-# 6. 启动前端开发服务器
+# 6. 启动后端服务
+cd mini-services/k8s-service
+PORT=8080 KUBECONFIG=.kube/config ./k8s-service &
+cd ../..
+
+# 7. 启动前端开发服务器
 bun run dev
 ```
 
@@ -130,8 +156,8 @@ bun run dev
 | 服务 | 地址 | 说明 |
 |------|------|------|
 | 前端界面 | http://localhost:3000 | KubeNext 管理界面 |
-| 后端 API | http://localhost:8080/api | RESTful API |
-| 健康检查 | http://localhost:8080/health | 服务状态 |
+| 后端 API | http://localhost:${K8S_SERVICE_PORT}/api | RESTful API |
+| 健康检查 | http://localhost:${K8S_SERVICE_PORT}/health | 服务状态 |
 
 ---
 

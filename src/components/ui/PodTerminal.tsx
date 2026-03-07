@@ -8,6 +8,9 @@ import { WebLinksAddon } from "xterm-addon-web-links";
 import { Button } from "@/components/ui/button";
 import "xterm/css/xterm.css";
 
+// 后端服务端口 - 从环境变量读取，默认 8080
+const K8S_SERVICE_PORT = process.env.NEXT_PUBLIC_K8S_SERVICE_PORT || '8080';
+
 // 可用的 Shell 类型
 const SHELL_OPTIONS = [
   { value: "/bin/bash", label: "bash", desc: "Bourne Again Shell (推荐)" },
@@ -90,7 +93,7 @@ export default function PodTerminal({ namespace, podName, container, onClose }: 
     // 构建 WebSocket URL，添加 shell 参数
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsHost = window.location.host;
-    const wsUrl = `${wsProtocol}//${wsHost}/api/ws/exec?XTransformPort=8080&namespace=${namespace}&pod=${podName}${container ? `&container=${container}` : ""}&shell=${encodeURIComponent(shell)}`;
+    const wsUrl = `${wsProtocol}//${wsHost}/api/ws/exec?XTransformPort=${K8S_SERVICE_PORT}&namespace=${namespace}&pod=${podName}${container ? `&container=${container}` : ""}&shell=${encodeURIComponent(shell)}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;

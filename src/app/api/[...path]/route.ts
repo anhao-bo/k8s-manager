@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getGoApiUrl } from '@/lib/api-config';
 
-const GO_API_URL = 'http://localhost:8080';
+// 获取后端 API URL
+const GO_API_URL = getGoApiUrl();
 
 async function proxyRequest(
   method: string,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getK8sServicePort } from '@/lib/api-config';
 
 // Terminal session storage (in-memory for simplicity)
 const sessions = new Map<string, {
@@ -36,7 +37,8 @@ export async function POST(request: NextRequest) {
 
     if (type === 'input' && input) {
       // Forward input to backend via WebSocket
-      const wsUrl = `ws://localhost:8080/api/ws/exec?${new URLSearchParams({
+      const port = getK8sServicePort();
+      const wsUrl = `ws://localhost:${port}/api/ws/exec?${new URLSearchParams({
         namespace: body.namespace || 'default',
         pod: body.pod || '',
         shell: body.shell || '/bin/sh',

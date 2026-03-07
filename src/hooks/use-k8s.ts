@@ -3,11 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 // Go API 基础地址 (通过 Next.js API 代理转发)
 const API_BASE = '/api';
 
+// 后端服务端口 - 从环境变量读取，默认 8080
+const K8S_SERVICE_PORT = process.env.NEXT_PUBLIC_K8S_SERVICE_PORT || '8080';
+
 // 通用 fetch 函数
 async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
   // 添加 XTransformPort 查询参数
   const urlObj = new URL(url, window.location.origin);
-  urlObj.searchParams.set('XTransformPort', '8080');
+  urlObj.searchParams.set('XTransformPort', K8S_SERVICE_PORT);
 
   const response = await fetch(urlObj.toString(), options);
   if (!response.ok) {
@@ -413,7 +416,7 @@ export function useRecreatePod() {
       const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
       
       // 步骤 1: 删除旧 Pod
-      const deleteRes = await fetch(`/api/pods?XTransformPort=8080`, {
+      const deleteRes = await fetch(`/api/pods?XTransformPort=${K8S_SERVICE_PORT}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ namespace, name }),
@@ -439,7 +442,7 @@ export function useRecreatePod() {
       }
       
       // 步骤 3: 创建新 Pod（使用 apply API）
-      const applyResponse = await fetch('/api/apply?XTransformPort=8080', {
+      const applyResponse = await fetch(`/api/apply?XTransformPort=${K8S_SERVICE_PORT}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ yaml, namespace }),

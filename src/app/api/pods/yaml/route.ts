@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getGoApiUrl } from '@/lib/api-config';
 
-const GO_API_URL = 'http://localhost:8080';
+const GO_API_URL = getGoApiUrl();
 
 // GET - 获取 Pod YAML
 export async function GET(request: NextRequest) {

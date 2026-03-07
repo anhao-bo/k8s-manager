@@ -8,6 +8,10 @@ mini-services/k8s-service/k8s-service
 mini-services/k8s-service/kubectl
 kubectl
 
+# Kubeconfig (敏感文件)
+.kube/
+*.kubeconfig
+
 # 下载文件
 download/
 *.tar.gz

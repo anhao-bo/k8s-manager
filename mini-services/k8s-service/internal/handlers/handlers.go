@@ -6,6 +6,7 @@ import (
         "os"
         "path/filepath"
         "strconv"
+        "strings"
         "sync"
 
         "k8s-service/internal/k8s"
@@ -43,25 +44,48 @@ func (h *Handler) GetClient() *k8s.Client {
 
 // UploadKubeconfig 上传 kubeconfig 文件
 func (h *Handler) UploadKubeconfig(c *gin.Context) {
-        // 获取上传的文件
-        file, header, err := c.Request.FormFile("kubeconfig")
-        if err != nil {
-                c.JSON(http.StatusBadRequest, models.ErrorResponse{
-                        Success: false,
-                        Error:   "请上传 kubeconfig 文件: " + err.Error(),
-                })
-                return
-        }
-        defer file.Close()
+        // 支持两种方式：multipart/form-data 和 JSON
+        var content []byte
+        var filename string
 
-        // 读取文件内容
-        content, err := io.ReadAll(file)
-        if err != nil {
-                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-                        Success: false,
-                        Error:   "读取文件失败: " + err.Error(),
-                })
-                return
+        contentType := c.GetHeader("Content-Type")
+
+        if strings.HasPrefix(contentType, "application/json") {
+                // JSON 方式
+                var req struct {
+                        Filename string `json:"filename"`
+                        Content  string `json:"content"`
+                }
+                if err := c.ShouldBindJSON(&req); err != nil {
+                        c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                                Success: false,
+                                Error:   "解析请求失败: " + err.Error(),
+                        })
+                        return
+                }
+                content = []byte(req.Content)
+                filename = req.Filename
+        } else {
+                // multipart/form-data 方式
+                file, header, err := c.Request.FormFile("kubeconfig")
+                if err != nil {
+                        c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                                Success: false,
+                                Error:   "请上传 kubeconfig 文件: " + err.Error(),
+                        })
+                        return
+                }
+                defer file.Close()
+
+                content, err = io.ReadAll(file)
+                if err != nil {
+                        c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                                Success: false,
+                                Error:   "读取文件失败: " + err.Error(),
+                        })
+                        return
+                }
+                filename = header.Filename
         }
 
         // 验证文件内容不为空
@@ -120,7 +144,7 @@ func (h *Handler) UploadKubeconfig(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{
                 "success":  true,
                 "message":  "kubeconfig 上传成功",
-                "filename": header.Filename,
+                "filename": filename,
                 "cluster": gin.H{
                         "version":  info.Version,
                         "platform": info.Platform,

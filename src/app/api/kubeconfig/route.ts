@@ -41,31 +41,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 读取文件内容为 Buffer
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    // 读取文件内容
+    const content = await file.text();
     
-    // 使用 Node.js 原生方式发送 multipart/form-data
-    // 创建 boundary
-    const boundary = '----FormBoundary' + Math.random().toString(36).substring(2);
-    
-    // 构建 multipart/form-data body
-    const bodyParts = [
-      `--${boundary}`,
-      `Content-Disposition: form-data; name="kubeconfig"; filename="${file.name}"`,
-      `Content-Type: application/octet-stream`,
-      '',
-      fileBuffer.toString('binary'),
-      `--${boundary}--`,
-    ];
-    
-    const requestBody = bodyParts.join('\r\n');
+    if (!content || content.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'kubeconfig 文件内容为空' },
+        { status: 400 }
+      );
+    }
 
+    // 直接发送文件内容到后端
     const response = await fetch(`${GO_API_URL}/api/kubeconfig/upload`, {
       method: 'POST',
       headers: {
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Type': 'application/json',
       },
-      body: requestBody,
+      body: JSON.stringify({
+        filename: file.name,
+        content: content,
+      }),
     });
 
     const text = await response.text();

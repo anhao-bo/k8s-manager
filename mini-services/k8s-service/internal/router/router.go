@@ -42,6 +42,8 @@ func SetupRouter(h *handlers.Handler) *gin.Engine {
                 // Pods
                 api.GET("/pods", h.GetPods)
                 api.POST("/pods", h.CreatePod)
+                api.GET("/pods/yaml", h.GetPodYaml)
+                api.PUT("/pods/yaml", h.UpdatePodYaml)
                 api.GET("/pods/logs", h.GetPodLogs)
                 api.DELETE("/pods", h.DeletePod)
 

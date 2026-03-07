@@ -338,6 +338,66 @@ func (h *Handler) DeletePod(c *gin.Context) {
         })
 }
 
+// GetPodYaml 获取 Pod YAML
+func (h *Handler) GetPodYaml(c *gin.Context) {
+        namespace := c.Query("namespace")
+        name := c.Query("name")
+
+        if namespace == "" || name == "" {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   "namespace and name are required",
+                })
+                return
+        }
+
+        yaml, err := h.Client.GetPodYaml(namespace, name)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+                "success": true,
+                "yaml":    yaml,
+        })
+}
+
+// UpdatePodYaml 更新 Pod YAML
+func (h *Handler) UpdatePodYaml(c *gin.Context) {
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+                Yaml      string `json:"yaml" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        result, err := h.Client.UpdatePodYaml(req.Namespace, req.Name, req.Yaml)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        c.JSON(http.StatusOK, gin.H{
+                "success": true,
+                "status":  result.Status,
+                "message": result.Message,
+                "pod":     result.Pod,
+        })
+}
+
 // ==================== Deployments ====================
 
 // GetDeployments 获取Deployment列表

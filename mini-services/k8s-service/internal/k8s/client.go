@@ -4,7 +4,6 @@ import (
         "context"
         "fmt"
         "io"
-        "os/exec"
         "path/filepath"
         "strings"
         "time"
@@ -1805,16 +1804,23 @@ func (c *Client) GetMiddlewareStatus() (*models.MiddlewareOverview, error) {
         return overview, nil
 }
 
-// GetPodYaml 获取 Pod 的 YAML 格式（直接使用 kubectl 命令，与命令行输出完全一致）
+// GetPodYaml 获取 Pod 的 YAML 格式（使用 client-go 原生方法）
 func (c *Client) GetPodYaml(namespace, name string) (string, error) {
-        // 直接执行 kubectl get pod -o yaml 命令
-        kubectlPath := "/home/z/my-project/mini-services/k8s-service/kubectl"
-        cmd := exec.Command(kubectlPath, "get", "pod", name, "-n", namespace, "-o", "yaml")
-        output, err := cmd.CombinedOutput()
+        ctx := context.Background()
+
+        // 使用 client-go 获取 Pod
+        pod, err := c.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
         if err != nil {
-                return "", fmt.Errorf("kubectl get pod failed: %w, output: %s", err, string(output))
+                return "", fmt.Errorf("failed to get pod: %w", err)
         }
-        return string(output), nil
+
+        // 使用 yaml 序列化为 YAML 格式
+        yamlBytes, err := yaml.Marshal(pod)
+        if err != nil {
+                return "", fmt.Errorf("failed to marshal pod to yaml: %w", err)
+        }
+
+        return string(yamlBytes), nil
 }
 
 // UpdatePodYamlResult 更新结果
@@ -1869,11 +1875,13 @@ func (c *Client) UpdatePodYaml(namespace, name, newYamlStr string) (*UpdatePodYa
                 return nil, fmt.Errorf("pod is managed by %s '%s', please edit the controller instead", owner.Kind, owner.Name)
         }
 
-        // 删除旧 Pod（使用 kubectl 命令）
-        kubectlPath := "/home/z/my-project/mini-services/k8s-service/kubectl"
-        deleteCmd := exec.Command(kubectlPath, "delete", "pod", name, "-n", namespace, "--ignore-not-found=true")
-        if deleteOutput, err := deleteCmd.CombinedOutput(); err != nil {
-                return nil, fmt.Errorf("kubectl delete pod failed: %w, output: %s", err, string(deleteOutput))
+        // 删除旧 Pod（使用 client-go 原生方法）
+        deletePolicy := metav1.DeletePropagationForeground
+        deleteOptions := metav1.DeleteOptions{
+                PropagationPolicy: &deletePolicy,
+        }
+        if err := c.Clientset.CoreV1().Pods(namespace).Delete(ctx, name, deleteOptions); err != nil {
+                return nil, fmt.Errorf("failed to delete pod: %w", err)
         }
 
         // 等待 Pod 完全删除
@@ -1886,17 +1894,19 @@ func (c *Client) UpdatePodYaml(namespace, name, newYamlStr string) (*UpdatePodYa
                 time.Sleep(10 * time.Millisecond)
         }
 
-        // 使用 kubectl apply 创建新 Pod
-        applyCmd := exec.Command(kubectlPath, "apply", "-f", "-")
-        applyCmd.Stdin = strings.NewReader(newYamlStr)
-        if applyOutput, err := applyCmd.CombinedOutput(); err != nil {
-                return nil, fmt.Errorf("kubectl apply failed: %w, output: %s", err, string(applyOutput))
-        }
+        // 清理新 Pod 的字段（这些字段在创建时不能设置）
+        newPod.ObjectMeta.ResourceVersion = ""
+        newPod.ObjectMeta.UID = ""
+        newPod.ObjectMeta.SelfLink = ""
+        newPod.ObjectMeta.Generation = 0
+        newPod.ObjectMeta.CreationTimestamp = metav1.Time{}
+        newPod.ObjectMeta.OwnerReferences = nil
+        newPod.Status = corev1.PodStatus{}
 
-        // 获取新创建的 Pod 信息
-        created, err := c.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+        // 使用 client-go 创建新 Pod
+        created, err := c.Clientset.CoreV1().Pods(namespace).Create(ctx, &newPod, metav1.CreateOptions{})
         if err != nil {
-                return nil, fmt.Errorf("failed to get created pod: %w", err)
+                return nil, fmt.Errorf("failed to create pod: %w", err)
         }
 
         return &UpdatePodYamlResult{

@@ -1,0 +1,13 @@
+{
+  "name": "k8s-api",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun --hot run index.ts",
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^1.0.0",
+    "hono": "^4.6.0",
+    "yaml": "^2.6.0"
+  }
+}

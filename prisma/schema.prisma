@@ -1,0 +1,171 @@
+// KubeNext - Kubernetes 管理平台数据库模型
+// 参考 kubemanage 项目设计
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户管理 ====================
+
+model User {
+  id                  String              @id @default(cuid())
+  email               String              @unique
+  username            String              @unique
+  password            String              // 加密存储
+  nickname            String?
+  avatar              String?
+  role                String              @default("user") // admin, user, viewer
+  status              Int                 @default(1) // 1: 正常, 0: 禁用
+  lastLoginAt         DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  namespaceFavorites  NamespaceFavorite[]
+}
+
+// ==================== 集群管理 ====================
+
+model Cluster {
+  id                      String              @id @default(cuid())
+  name                    String              @unique
+  alias                   String?
+  description             String?
+  
+  // 连接配置
+  server                  String              // API Server 地址
+  insecureSkipTLSVerify   Boolean             @default(false)
+  certificateAuthorityData String?            // CA 证书 (base64)
+  
+  // 认证方式 - 支持多种
+  authType                String              @default("token") // token, certificate, password
+  
+  // Token 认证
+  token                   String?             // Bearer Token
+  
+  // 证书认证
+  clientCertificateData   String?             // 客户端证书 (base64)
+  clientKeyData           String?             // 客户端私钥 (base64)
+  
+  // 用户名密码认证
+  username                String?
+  password                String?             // 加密存储
+  
+  // kubeconfig 文件方式
+  kubeConfig              String?             // 完整 kubeconfig 内容
+  
+  // 集群状态
+  version                 String?
+  status                  Int                 @default(0) // 0: 未连接, 1: 正常, 2: 异常
+  nodeCount               Int                 @default(0)
+  lastConnectAt           DateTime?
+  lastError               String?
+  
+  // 元数据
+  isDefault               Boolean             @default(false)
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  
+  namespaceFavorites      NamespaceFavorite[]
+}
+
+// ==================== 系统配置 ====================
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  category    String   @default("general") // general, theme, security, notification
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==================== 命名空间收藏 ====================
+
+model NamespaceFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  clusterId String
+  namespace String
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cluster   Cluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, clusterId, namespace])
+}
+
+// ==================== 操作日志 ====================
+
+model OperationLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  username  String?
+  action    String
+  resource  String?
+  detail    String?
+  ip        String?
+  status    Int      @default(1) // 1: 成功, 0: 失败
+  createdAt DateTime @default(now())
+}
+
+// ==================== 告警规则 ====================
+
+model AlertRule {
+  id          String   @id @default(cuid())
+  name        String
+  expr        String   // PromQL 表达式
+  duration    String   @default("5m")
+  severity    String   @default("warning") // critical, warning, info
+  message     String?
+  labels      String?  // JSON 格式的标签
+  status      Int      @default(1) // 1: 启用, 0: 禁用
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==================== 通知渠道 ====================
+
+model NotificationChannel {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // email, wechat, dingtalk, slack, webhook
+  config    String   // JSON 格式的配置
+  status    Int      @default(1) // 1: 启用, 0: 禁用
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== Helm 仓库 ====================
+
+model HelmRepository {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  url         String
+  username    String?
+  password    String?
+  status      Int      @default(1) // 1: 正常, 0: 异常
+  lastSyncAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==================== 镜像仓库 ====================
+
+model ImageRegistry {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  url         String
+  type        String   @default("private") // public, private
+  authType    String   @default("username") // username, token
+  username    String?
+  password    String?  // 加密存储
+  status      Int      @default(1) // 1: 正常, 0: 异常
+  lastSyncAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

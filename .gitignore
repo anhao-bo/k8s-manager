@@ -62,3 +62,6 @@ mini-services/k8s-service/k8s-service
 
 # Environment
 .env.local
+
+# Third-party source code (too large for git)
+third-party/

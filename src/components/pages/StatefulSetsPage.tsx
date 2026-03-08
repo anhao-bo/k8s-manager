@@ -88,9 +88,23 @@ function LoadingSkeleton() {
   );
 }
 
+interface StatefulSetDetail {
+  name: string;
+  namespace: string;
+  replicas: number;
+  readyReplicas: number;
+  serviceName: string;
+  strategy: string;
+  createdAt: string;
+  labels: Record<string, string>;
+  containers: Array<{ name: string; image: string; ports: number[] }>;
+}
+
 export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedStatefulSet, setSelectedStatefulSet] = useState<StatefulSetDetail | null>(null);
   const [createForm, setCreateForm] = useState({
     name: "",
     image: "",
@@ -168,6 +182,22 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
           toast({ title: "删除失败", description: error.message, variant: "destructive" });
         },
       });
+    }
+  };
+
+  // Handle view StatefulSet detail
+  const handleViewDetail = async (stsNamespace: string, stsName: string) => {
+    try {
+      const response = await fetch(`/api/statefulsets/detail?namespace=${stsNamespace}&name=${stsName}&XTransformPort=8080`);
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedStatefulSet(data);
+        setIsDetailOpen(true);
+      } else {
+        toast({ title: "获取详情失败", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "获取详情失败", variant: "destructive" });
     }
   };
 
@@ -284,7 +314,10 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
                       <DropdownMenuContent align="end" className="bg-slate-900 border-slate-700">
                         <DropdownMenuLabel className="text-slate-400">操作</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-slate-700" />
-                        <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
+                        <DropdownMenuItem 
+                          className="text-slate-300 hover:text-white focus:bg-slate-800"
+                          onClick={() => handleViewDetail(sts.namespace, sts.name)}
+                        >
                           <Eye className="h-4 w-4 mr-2" /> 查看详情
                         </DropdownMenuItem>
                         <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
@@ -391,6 +424,66 @@ export default function StatefulSetsPage({ namespace }: StatefulSetsPageProps) {
             >
               {createStatefulSet.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Database className="h-5 w-5 text-purple-400" />
+              StatefulSet 详情
+            </DialogTitle>
+          </DialogHeader>
+          {selectedStatefulSet && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-slate-500 text-xs">名称</p>
+                  <p className="text-white font-mono">{selectedStatefulSet.name}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">命名空间</p>
+                  <p className="text-white">{selectedStatefulSet.namespace}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">副本</p>
+                  <p className="text-emerald-400">{selectedStatefulSet.readyReplicas}/{selectedStatefulSet.replicas}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Service</p>
+                  <p className="text-white font-mono text-sm">{selectedStatefulSet.serviceName || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">策略</p>
+                  <Badge variant="secondary" className="bg-slate-800">{selectedStatefulSet.strategy}</Badge>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">创建时间</p>
+                  <p className="text-white text-sm">{selectedStatefulSet.createdAt}</p>
+                </div>
+              </div>
+              {selectedStatefulSet.containers && selectedStatefulSet.containers.length > 0 && (
+                <div>
+                  <p className="text-slate-500 text-xs mb-2">容器</p>
+                  <div className="space-y-2">
+                    {selectedStatefulSet.containers.map((container, idx) => (
+                      <div key={idx} className="bg-slate-800 rounded p-3">
+                        <p className="text-sky-400 font-mono text-sm">{container.name}</p>
+                        <p className="text-slate-400 text-xs">{container.image}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="border-slate-700 text-slate-300">
+              关闭
             </Button>
           </DialogFooter>
         </DialogContent>

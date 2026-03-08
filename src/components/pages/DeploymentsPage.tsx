@@ -34,6 +34,7 @@ import {
   RotateCcw,
   Eye,
   Loader2,
+  Code,
 } from "lucide-react";
 import {
   useDeployments,
@@ -43,6 +44,7 @@ import {
   useDeleteDeployment,
   useNamespaces
 } from "@/hooks/use-k8s";
+import ResourceYamlEditor from "@/components/ui/ResourceYamlEditor";
 
 interface DeploymentsPageProps {
   namespace: string;
@@ -109,6 +111,8 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedResource, setSelectedResource] = useState<{ namespace: string; name: string } | null>(null);
   const [selectedDeployment, setSelectedDeployment] = useState<DeploymentDetail | null>(null);
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -220,6 +224,12 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
     } catch {
       toast({ title: "获取详情失败", variant: "destructive" });
     }
+  };
+
+  // Handle edit deployment
+  const handleEdit = (deployNamespace: string, deployName: string) => {
+    setSelectedResource({ namespace: deployNamespace, name: deployName });
+    setIsEditOpen(true);
   };
 
   if (isLoading) {
@@ -356,7 +366,10 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
                         >
                           <Eye className="h-4 w-4 mr-2" /> 查看详情
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
+                        <DropdownMenuItem 
+                          className="text-slate-300 hover:text-white focus:bg-slate-800"
+                          onClick={() => handleEdit(deploy.namespace, deploy.name)}
+                        >
                           <Edit className="h-4 w-4 mr-2" /> 编辑
                         </DropdownMenuItem>
                         <DropdownMenuItem
@@ -465,6 +478,20 @@ export default function DeploymentsPage({ namespace }: DeploymentsPageProps) {
               创建
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-5xl h-[700px] bg-slate-900 border-slate-700 flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Code className="h-5 w-5 text-sky-400" />
+              编辑 Deployment YAML - {selectedResource?.name}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">命名空间: {selectedResource?.namespace}</DialogDescription>
+          </DialogHeader>
+          {selectedResource && <ResourceYamlEditor kind="Deployment" namespace={selectedResource.namespace} name={selectedResource.name} onClose={() => setIsEditOpen(false)} />}
         </DialogContent>
       </Dialog>
 

@@ -18,8 +18,13 @@ import (
         rbacv1 "k8s.io/api/rbac/v1"
         metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
         "k8s.io/apimachinery/pkg/api/resource"
+        "k8s.io/apimachinery/pkg/api/errors"
+        "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
         "k8s.io/apimachinery/pkg/runtime"
+        "k8s.io/apimachinery/pkg/runtime/schema"
+        "k8s.io/apimachinery/pkg/util/intstr"
         "k8s.io/client-go/kubernetes"
+        "k8s.io/client-go/dynamic"
         "k8s.io/client-go/rest"
         "k8s.io/client-go/tools/clientcmd"
         "k8s.io/client-go/util/homedir"
@@ -28,9 +33,10 @@ import (
 
 // Client Kubernetes客户端
 type Client struct {
-        Clientset  *kubernetes.Clientset
-        Config     *rest.Config
-        Namespace  string
+        Clientset     *kubernetes.Clientset
+        DynamicClient dynamic.Interface
+        Config        *rest.Config
+        Namespace     string
 }
 
 // NewClient 创建新的Kubernetes客户端
@@ -64,10 +70,16 @@ func NewClient(kubeconfigPath string, inCluster bool) (*Client, error) {
                 return nil, fmt.Errorf("failed to create clientset: %w", err)
         }
 
+        dynamicClient, err := dynamic.NewForConfig(config)
+        if err != nil {
+                return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+        }
+
         return &Client{
-                Clientset: clientset,
-                Config:    config,
-                Namespace: "", // 默认所有命名空间
+                Clientset:     clientset,
+                DynamicClient: dynamicClient,
+                Config:        config,
+                Namespace:     "", // 默认所有命名空间
         }, nil
 }
 
@@ -2979,4 +2991,480 @@ func countReadyContainers(pod *corev1.Pod) int {
                 }
         }
         return count
+}
+
+// ==================== Traefik 相关方法 ====================
+
+// GetTraefikStatus 获取 Traefik 安装状态
+func (c *Client) GetTraefikStatus() (*models.TraefikStatus, error) {
+        ctx := context.Background()
+
+        status := &models.TraefikStatus{
+                Installed: false,
+        }
+
+        // 检查 traefik 命名空间是否存在
+        _, err := c.Clientset.CoreV1().Namespaces().Get(ctx, "traefik", metav1.GetOptions{})
+        if err != nil {
+                return status, nil // 命名空间不存在，未安装
+        }
+
+        // 检查 traefik deployment 是否存在
+        deploy, err := c.Clientset.AppsV1().Deployments("traefik").Get(ctx, "traefik", metav1.GetOptions{})
+        if err != nil {
+                return status, nil // Deployment 不存在，未安装
+        }
+
+        status.Installed = true
+        status.Namespace = "traefik"
+        status.Replicas = *deploy.Spec.Replicas
+        status.ReadyReplicas = deploy.Status.ReadyReplicas
+
+        // 获取版本信息
+        for _, container := range deploy.Spec.Template.Spec.Containers {
+                if container.Name == "traefik" {
+                        // 从镜像名解析版本
+                        parts := strings.Split(container.Image, ":")
+                        if len(parts) > 1 {
+                                status.Version = parts[len(parts)-1]
+                        }
+                        break
+                }
+        }
+
+        // 检查 dashboard 服务
+        svc, err := c.Clientset.CoreV1().Services("traefik").Get(ctx, "traefik", metav1.GetOptions{})
+        if err == nil {
+                // 检查是否有 LoadBalancer IP
+                if len(svc.Status.LoadBalancer.Ingress) > 0 {
+                        lb := svc.Status.LoadBalancer.Ingress[0]
+                        if lb.IP != "" {
+                                status.Dashboard = fmt.Sprintf("http://%s:8080/dashboard/", lb.IP)
+                        } else if lb.Hostname != "" {
+                                status.Dashboard = fmt.Sprintf("http://%s:8080/dashboard/", lb.Hostname)
+                        }
+                }
+                if status.Dashboard == "" {
+                        status.Dashboard = "http://localhost:8080/dashboard/"
+                }
+        }
+
+        return status, nil
+}
+
+// InstallTraefik 安装 Traefik
+func (c *Client) InstallTraefik() error {
+        ctx := context.Background()
+
+        // 1. 创建命名空间
+        _, err := c.Clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name: "traefik",
+                },
+        }, metav1.CreateOptions{})
+        if err != nil && !errors.IsAlreadyExists(err) {
+                return fmt.Errorf("failed to create namespace: %v", err)
+        }
+
+        // 2. 创建 ServiceAccount
+        _, err = c.Clientset.CoreV1().ServiceAccounts("traefik").Create(ctx, &corev1.ServiceAccount{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      "traefik",
+                        Namespace: "traefik",
+                },
+        }, metav1.CreateOptions{})
+        if err != nil && !errors.IsAlreadyExists(err) {
+                return fmt.Errorf("failed to create serviceaccount: %v", err)
+        }
+
+        // 3. 创建 ClusterRole
+        _, err = c.Clientset.RbacV1().ClusterRoles().Create(ctx, &rbacv1.ClusterRole{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name: "traefik",
+                },
+                Rules: []rbacv1.PolicyRule{
+                        {
+                                APIGroups: []string{""},
+                                Resources: []string{"services", "endpoints", "secrets"},
+                                Verbs:     []string{"get", "list", "watch"},
+                        },
+                        {
+                                APIGroups: []string{"extensions", "networking.k8s.io"},
+                                Resources: []string{"ingresses", "ingressclasses"},
+                                Verbs:     []string{"get", "list", "watch"},
+                        },
+                        {
+                                APIGroups: []string{"traefik.io"},
+                                Resources: []string{"ingressroutes", "middlewares", "tlsoptions", "serverservices", "middlewaretcp", "ingressrouteudps", "tlsstores", "traefikservices", "ingressroutetcps"},
+                                Verbs:     []string{"get", "list", "watch"},
+                        },
+                },
+        }, metav1.CreateOptions{})
+        if err != nil && !errors.IsAlreadyExists(err) {
+                return fmt.Errorf("failed to create clusterrole: %v", err)
+        }
+
+        // 4. 创建 ClusterRoleBinding
+        _, err = c.Clientset.RbacV1().ClusterRoleBindings().Create(ctx, &rbacv1.ClusterRoleBinding{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name: "traefik",
+                },
+                RoleRef: rbacv1.RoleRef{
+                        APIGroup: "rbac.authorization.k8s.io",
+                        Kind:     "ClusterRole",
+                        Name:     "traefik",
+                },
+                Subjects: []rbacv1.Subject{
+                        {
+                                Kind:      "ServiceAccount",
+                                Name:      "traefik",
+                                Namespace: "traefik",
+                        },
+                },
+        }, metav1.CreateOptions{})
+        if err != nil && !errors.IsAlreadyExists(err) {
+                return fmt.Errorf("failed to create clusterrolebinding: %v", err)
+        }
+
+        // 5. 创建 Deployment
+        replicas := int32(1)
+        _, err = c.Clientset.AppsV1().Deployments("traefik").Create(ctx, &appsv1.Deployment{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      "traefik",
+                        Namespace: "traefik",
+                        Labels: map[string]string{
+                                "app": "traefik",
+                        },
+                },
+                Spec: appsv1.DeploymentSpec{
+                        Replicas: &replicas,
+                        Selector: &metav1.LabelSelector{
+                                MatchLabels: map[string]string{
+                                        "app": "traefik",
+                                },
+                        },
+                        Template: corev1.PodTemplateSpec{
+                                ObjectMeta: metav1.ObjectMeta{
+                                        Labels: map[string]string{
+                                                "app": "traefik",
+                                        },
+                                },
+                                Spec: corev1.PodSpec{
+                                        ServiceAccountName: "traefik",
+                                        Containers: []corev1.Container{
+                                                {
+                                                        Name:  "traefik",
+                                                        Image: "traefik:v3.2",
+                                                        Args: []string{
+                                                                "--api.insecure=true",
+                                                                "--providers.kubernetesingress=true",
+                                                                "--providers.kubernetescrd=true",
+                                                                "--entrypoints.web.address=:80",
+                                                                "--entrypoints.websecure.address=:443",
+                                                        },
+                                                        Ports: []corev1.ContainerPort{
+                                                                {Name: "web", ContainerPort: 80},
+                                                                {Name: "websecure", ContainerPort: 443},
+                                                                {Name: "dashboard", ContainerPort: 8080},
+                                                        },
+                                                },
+                                        },
+                                },
+                        },
+                },
+        }, metav1.CreateOptions{})
+        if err != nil && !errors.IsAlreadyExists(err) {
+                return fmt.Errorf("failed to create deployment: %v", err)
+        }
+
+        // 6. 创建 Service (LoadBalancer)
+        _, err = c.Clientset.CoreV1().Services("traefik").Create(ctx, &corev1.Service{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      "traefik",
+                        Namespace: "traefik",
+                },
+                Spec: corev1.ServiceSpec{
+                        Type: corev1.ServiceTypeLoadBalancer,
+                        Selector: map[string]string{
+                                "app": "traefik",
+                        },
+                        Ports: []corev1.ServicePort{
+                                {Name: "web", Port: 80, TargetPort: intstr.FromInt(80)},
+                                {Name: "websecure", Port: 443, TargetPort: intstr.FromInt(443)},
+                                {Name: "dashboard", Port: 8080, TargetPort: intstr.FromInt(8080)},
+                        },
+                },
+        }, metav1.CreateOptions{})
+        if err != nil && !errors.IsAlreadyExists(err) {
+                return fmt.Errorf("failed to create service: %v", err)
+        }
+
+        return nil
+}
+
+// GetIngressRoutes 获取 IngressRoute 列表 (Traefik CRD)
+func (c *Client) GetIngressRoutes(namespace string) ([]models.IngressRouteInfo, error) {
+        ctx := context.Background()
+
+        routes := make([]models.IngressRouteInfo, 0)
+
+        // 使用动态客户端获取 IngressRoute
+        gvr := schema.GroupVersionResource{
+                Group:    "traefik.io",
+                Version:  "v1alpha1",
+                Resource: "ingressroutes",
+        }
+
+        var list *unstructured.UnstructuredList
+        var err error
+
+        if namespace != "" {
+                list, err = c.DynamicClient.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
+        } else {
+                list, err = c.DynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+        }
+
+        if err != nil {
+                // CRD 可能不存在，返回空列表
+                return routes, nil
+        }
+
+        for _, item := range list.Items {
+                route := models.IngressRouteInfo{
+                        Name:        item.GetName(),
+                        Namespace:   item.GetNamespace(),
+                        EntryPoints: make([]string, 0),
+                        Routes:      make([]models.IngressRouteRoute, 0),
+                        CreatedAt:   item.GetCreationTimestamp().Time,
+                }
+
+                // 提取 spec.entryPoints
+                if spec, ok := item.Object["spec"].(map[string]interface{}); ok {
+                        if eps, ok := spec["entryPoints"].([]interface{}); ok {
+                                for _, ep := range eps {
+                                        if s, ok := ep.(string); ok {
+                                                route.EntryPoints = append(route.EntryPoints, s)
+                                        }
+                                }
+                        }
+
+                        // 提取 spec.routes
+                        if routesSpec, ok := spec["routes"].([]interface{}); ok {
+                                for _, r := range routesSpec {
+                                        if rMap, ok := r.(map[string]interface{}); ok {
+                                                routeInfo := models.IngressRouteRoute{
+                                                        Services: make([]string, 0),
+                                                }
+                                                if match, ok := rMap["match"].(string); ok {
+                                                        routeInfo.Match = match
+                                                }
+                                                if kind, ok := rMap["kind"].(string); ok {
+                                                        routeInfo.Kind = kind
+                                                }
+                                                if services, ok := rMap["services"].([]interface{}); ok {
+                                                        for _, svc := range services {
+                                                                if svcMap, ok := svc.(map[string]interface{}); ok {
+                                                                        if name, ok := svcMap["name"].(string); ok {
+                                                                                port := ""
+                                                                                if p, ok := svcMap["port"].(int64); ok {
+                                                                                        port = fmt.Sprintf(":%d", p)
+                                                                                }
+                                                                                routeInfo.Services = append(routeInfo.Services, name+port)
+                                                                        }
+                                                                }
+                                                        }
+                                                }
+                                                route.Routes = append(route.Routes, routeInfo)
+                                        }
+                                }
+                        }
+
+                        // 检查 TLS
+                        if _, ok := spec["tls"]; ok {
+                                route.TLS = true
+                        }
+                }
+
+                routes = append(routes, route)
+        }
+
+        return routes, nil
+}
+
+// CreateIngressRoute 创建 IngressRoute
+func (c *Client) CreateIngressRoute(req models.CreateIngressRouteRequest) (*models.IngressRouteInfo, error) {
+        ctx := context.Background()
+
+        namespace := req.Namespace
+        if namespace == "" {
+                namespace = "default"
+        }
+
+        // 构建路由
+        routes := make([]interface{}, 0)
+        for _, r := range req.Routes {
+                services := make([]interface{}, 0)
+                for _, s := range r.Services {
+                        services = append(services, map[string]interface{}{
+                                "name": s.Name,
+                                "port": s.Port,
+                        })
+                }
+                routes = append(routes, map[string]interface{}{
+                        "match":    r.Match,
+                        "kind":     r.Kind,
+                        "services": services,
+                })
+        }
+
+        ingressRoute := &unstructured.Unstructured{
+                Object: map[string]interface{}{
+                        "apiVersion": "traefik.io/v1alpha1",
+                        "kind":       "IngressRoute",
+                        "metadata": map[string]interface{}{
+                                "name":      req.Name,
+                                "namespace": namespace,
+                        },
+                        "spec": map[string]interface{}{
+                                "entryPoints": req.EntryPoints,
+                                "routes":       routes,
+                        },
+                },
+        }
+
+        // 添加 TLS 配置
+        if req.TLS != nil && req.TLS.SecretName != "" {
+                ingressRoute.Object["spec"].(map[string]interface{})["tls"] = map[string]interface{}{
+                        "secretName": req.TLS.SecretName,
+                }
+        }
+
+        gvr := schema.GroupVersionResource{
+                Group:    "traefik.io",
+                Version:  "v1alpha1",
+                Resource: "ingressroutes",
+        }
+
+        _, err := c.DynamicClient.Resource(gvr).Namespace(namespace).Create(ctx, ingressRoute, metav1.CreateOptions{})
+        if err != nil {
+                return nil, fmt.Errorf("failed to create ingressroute: %v", err)
+        }
+
+        return &models.IngressRouteInfo{
+                Name:        req.Name,
+                Namespace:   namespace,
+                EntryPoints: req.EntryPoints,
+                CreatedAt:   time.Now(),
+        }, nil
+}
+
+// DeleteIngressRoute 删除 IngressRoute
+func (c *Client) DeleteIngressRoute(namespace, name string) error {
+        ctx := context.Background()
+
+        gvr := schema.GroupVersionResource{
+                Group:    "traefik.io",
+                Version:  "v1alpha1",
+                Resource: "ingressroutes",
+        }
+
+        return c.DynamicClient.Resource(gvr).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// GetTraefikMiddlewares 获取 Traefik Middlewares 列表
+func (c *Client) GetTraefikMiddlewares(namespace string) ([]models.TraefikMiddlewareInfo, error) {
+        ctx := context.Background()
+
+        middlewares := make([]models.TraefikMiddlewareInfo, 0)
+
+        gvr := schema.GroupVersionResource{
+                Group:    "traefik.io",
+                Version:  "v1alpha1",
+                Resource: "middlewares",
+        }
+
+        var list *unstructured.UnstructuredList
+        var err error
+
+        if namespace != "" {
+                list, err = c.DynamicClient.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
+        } else {
+                list, err = c.DynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+        }
+
+        if err != nil {
+                return middlewares, nil
+        }
+
+        for _, item := range list.Items {
+                mw := models.TraefikMiddlewareInfo{
+                        Name:      item.GetName(),
+                        Namespace: item.GetNamespace(),
+                        CreatedAt: item.GetCreationTimestamp().Time,
+                }
+
+                // 检测 middleware 类型
+                if spec, ok := item.Object["spec"].(map[string]interface{}); ok {
+                        for k := range spec {
+                                mw.Type = k
+                                break
+                        }
+                }
+
+                middlewares = append(middlewares, mw)
+        }
+
+        return middlewares, nil
+}
+
+// GetTLSOptions 获取 TLSOptions 列表
+func (c *Client) GetTLSOptions(namespace string) ([]models.TLSOptionInfo, error) {
+        ctx := context.Background()
+
+        options := make([]models.TLSOptionInfo, 0)
+
+        gvr := schema.GroupVersionResource{
+                Group:    "traefik.io",
+                Version:  "v1alpha1",
+                Resource: "tlsoptions",
+        }
+
+        var list *unstructured.UnstructuredList
+        var err error
+
+        if namespace != "" {
+                list, err = c.DynamicClient.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
+        } else {
+                list, err = c.DynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+        }
+
+        if err != nil {
+                return options, nil
+        }
+
+        for _, item := range list.Items {
+                opt := models.TLSOptionInfo{
+                        Name:        item.GetName(),
+                        Namespace:   item.GetNamespace(),
+                        CipherSuites: make([]string, 0),
+                        CreatedAt:   item.GetCreationTimestamp().Time,
+                }
+
+                if spec, ok := item.Object["spec"].(map[string]interface{}); ok {
+                        if minVer, ok := spec["minVersion"].(string); ok {
+                                opt.MinVersion = minVer
+                        }
+                        if suites, ok := spec["cipherSuites"].([]interface{}); ok {
+                                for _, s := range suites {
+                                        if str, ok := s.(string); ok {
+                                                opt.CipherSuites = append(opt.CipherSuites, str)
+                                        }
+                                }
+                        }
+                }
+
+                options = append(options, opt)
+        }
+
+        return options, nil
 }

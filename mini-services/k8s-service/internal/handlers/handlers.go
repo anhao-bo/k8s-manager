@@ -1477,3 +1477,181 @@ func (h *Handler) CreateCronJob(c *gin.Context) {
         }
         c.JSON(http.StatusOK, cj)
 }
+
+// ==================== Traefik 相关 ====================
+
+// GetTraefikStatus 获取 Traefik 安装状态
+func (h *Handler) GetTraefikStatus(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        status, err := h.Client.GetTraefikStatus()
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, status)
+}
+
+// InstallTraefik 安装 Traefik
+func (h *Handler) InstallTraefik(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        err := h.Client.InstallTraefik()
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "Traefik installed successfully",
+        })
+}
+
+// GetIngressRoutes 获取 IngressRoute 列表
+func (h *Handler) GetIngressRoutes(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        namespace := c.Query("namespace")
+        routes, err := h.Client.GetIngressRoutes(namespace)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, routes)
+}
+
+// CreateIngressRoute 创建 IngressRoute
+func (h *Handler) CreateIngressRoute(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        var req models.CreateIngressRouteRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        route, err := h.Client.CreateIngressRoute(req)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, route)
+}
+
+// DeleteIngressRoute 删除 IngressRoute
+func (h *Handler) DeleteIngressRoute(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        var req struct {
+                Namespace string `json:"namespace" binding:"required"`
+                Name      string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+
+        if err := h.Client.DeleteIngressRoute(req.Namespace, req.Name); err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, models.APIResponse{
+                Success: true,
+                Message: "ingressroute deleted successfully",
+        })
+}
+
+// GetTraefikMiddlewares 获取 Traefik Middlewares 列表
+func (h *Handler) GetTraefikMiddlewares(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        namespace := c.Query("namespace")
+        middlewares, err := h.Client.GetTraefikMiddlewares(namespace)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, middlewares)
+}
+
+// GetTLSOptions 获取 TLSOptions 列表
+func (h *Handler) GetTLSOptions(c *gin.Context) {
+        if h.Client == nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   "Kubernetes client not initialized",
+                })
+                return
+        }
+
+        namespace := c.Query("namespace")
+        options, err := h.Client.GetTLSOptions(namespace)
+        if err != nil {
+                c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+                        Success: false,
+                        Error:   err.Error(),
+                })
+                return
+        }
+        c.JSON(http.StatusOK, options)
+}

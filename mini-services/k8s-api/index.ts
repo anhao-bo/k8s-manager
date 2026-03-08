@@ -920,6 +920,238 @@ app.get('/api/middleware/status', async (c) => {
   }
 });
 
+// ==================== MetalLB ====================
+
+app.get('/api/metallb/status', async (c) => {
+  if (!clientInitialized || !coreV1Api) {
+    return c.json({ installed: false });
+  }
+  
+  try {
+    // 检查 metallb-system 命名空间
+    const namespaces = await coreV1Api.listNamespace();
+    const metallbNs = namespaces.body.items.find((ns: any) => ns.metadata.name === 'metallb-system');
+    
+    if (!metallbNs) {
+      return c.json({ installed: false });
+    }
+    
+    // 获取 speaker pods
+    const pods = await coreV1Api.listNamespacedPod('metallb-system');
+    const speakerPods = pods.body.items.filter((pod: any) => 
+      pod.metadata.labels?.['app.kubernetes.io/component'] === 'speaker'
+    );
+    
+    let speakerReady = 0;
+    for (const pod of speakerPods) {
+      for (const cond of (pod.status.conditions || [])) {
+        if (cond.type === 'Ready' && cond.status === 'True') {
+          speakerReady++;
+          break;
+        }
+      }
+    }
+    
+    return c.json({
+      installed: true,
+      namespace: 'metallb-system',
+      version: 'v0.14.5',
+      speakerPods: speakerPods.length,
+      speakerReady,
+      webhookConfigured: true
+    });
+  } catch (error: any) {
+    return c.json({ installed: false, error: error.message });
+  }
+});
+
+app.post('/api/metallb/install', async (c) => {
+  if (!clientInitialized || !coreV1Api) {
+    return c.json({ success: false, error: 'Kubernetes client not initialized' }, 500);
+  }
+  
+  try {
+    // 创建 metallb-system 命名空间
+    const nsExists = await coreV1Api.listNamespace();
+    if (!nsExists.body.items.find((ns: any) => ns.metadata.name === 'metallb-system')) {
+      await coreV1Api.createNamespace({
+        metadata: {
+          name: 'metallb-system',
+          labels: {
+            'pod-security.kubernetes.io/audit': 'privileged',
+            'pod-security.kubernetes.io/enforce': 'privileged',
+            'pod-security.kubernetes.io/warn': 'privileged'
+          }
+        }
+      });
+    }
+    
+    return c.json({ 
+      success: true, 
+      message: 'MetalLB namespace created. Please apply the MetalLB manifest manually.',
+      manifestUrl: 'https://raw.githubusercontent.com/metallb/metallb/v0.14.5/config/manifests/metallb-native.yaml'
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get('/api/metallb/ippools', async (c) => {
+  // 返回空数组，因为 CRD 可能不存在
+  return c.json([]);
+});
+
+app.post('/api/metallb/ippools', async (c) => {
+  return c.json({ success: false, error: 'CRD not available' }, 501);
+});
+
+app.get('/api/metallb/ippools/:name', async (c) => {
+  return c.json({ success: false, error: 'Not found' }, 404);
+});
+
+app.delete('/api/metallb/ippools/:name', async (c) => {
+  return c.json({ success: false, error: 'CRD not available' }, 501);
+});
+
+app.get('/api/metallb/l2advertisements', async (c) => {
+  return c.json([]);
+});
+
+app.post('/api/metallb/l2advertisements', async (c) => {
+  return c.json({ success: false, error: 'CRD not available' }, 501);
+});
+
+app.delete('/api/metallb/l2advertisements/:name', async (c) => {
+  return c.json({ success: false, error: 'CRD not available' }, 501);
+});
+
+app.get('/api/metallb/bgpadvertisements', async (c) => {
+  return c.json([]);
+});
+
+app.post('/api/metallb/bgpadvertisements', async (c) => {
+  return c.json({ success: false, error: 'CRD not available' }, 501);
+});
+
+app.delete('/api/metallb/bgpadvertisements/:name', async (c) => {
+  return c.json({ success: false, error: 'CRD not available' }, 501);
+});
+
+// ==================== Traefik ====================
+
+app.get('/api/traefik/status', async (c) => {
+  if (!clientInitialized || !coreV1Api) {
+    return c.json({ installed: false });
+  }
+  
+  try {
+    // 检查 traefik 命名空间
+    const namespaces = await coreV1Api.listNamespace();
+    const traefikNs = namespaces.body.items.find((ns: any) => ns.metadata.name === 'traefik');
+    
+    if (!traefikNs) {
+      // 也检查 traefik 是否在 kube-system 中
+      const pods = await coreV1Api.listNamespacedPod('kube-system');
+      const traefikPod = pods.body.items.find((pod: any) => 
+        pod.metadata.labels?.['app.kubernetes.io/name'] === 'traefik' ||
+        pod.metadata.name?.includes('traefik')
+      );
+      
+      if (!traefikPod) {
+        return c.json({ installed: false });
+      }
+      
+      return c.json({
+        installed: true,
+        namespace: 'kube-system',
+        version: 'v3.x',
+        dashboard: 'http://localhost:8080/dashboard/',
+        replicas: 1,
+        readyReplicas: traefikPod.status.phase === 'Running' ? 1 : 0
+      });
+    }
+    
+    // 获取 traefik pods
+    const pods = await coreV1Api.listNamespacedPod('traefik');
+    const traefikPods = pods.body.items.filter((pod: any) => 
+      pod.metadata.labels?.['app.kubernetes.io/name'] === 'traefik' ||
+      pod.metadata.labels?.['app'] === 'traefik'
+    );
+    
+    let readyReplicas = 0;
+    for (const pod of traefikPods) {
+      for (const cond of (pod.status.conditions || [])) {
+        if (cond.type === 'Ready' && cond.status === 'True') {
+          readyReplicas++;
+          break;
+        }
+      }
+    }
+    
+    // 获取 dashboard service
+    const services = await coreV1Api.listNamespacedService('traefik');
+    const traefikSvc = services.body.items.find((svc: any) => svc.metadata.name === 'traefik');
+    const dashboardPort = traefikSvc?.spec.ports?.find((p: any) => p.name === 'dashboard')?.port || 8080;
+    
+    return c.json({
+      installed: true,
+      namespace: 'traefik',
+      version: 'v3.2',
+      dashboard: `http://localhost:${dashboardPort}/dashboard/`,
+      replicas: traefikPods.length,
+      readyReplicas
+    });
+  } catch (error: any) {
+    return c.json({ installed: false, error: error.message });
+  }
+});
+
+app.post('/api/traefik/install', async (c) => {
+  if (!clientInitialized || !coreV1Api) {
+    return c.json({ success: false, error: 'Kubernetes client not initialized' }, 500);
+  }
+  
+  try {
+    // 创建 traefik 命名空间
+    const nsExists = await coreV1Api.listNamespace();
+    if (!nsExists.body.items.find((ns: any) => ns.metadata.name === 'traefik')) {
+      await coreV1Api.createNamespace({
+        metadata: {
+          name: 'traefik',
+          labels: {
+            'app.kubernetes.io/name': 'traefik'
+          }
+        }
+      });
+    }
+    
+    return c.json({ 
+      success: true, 
+      message: 'Traefik namespace created. Please apply the Traefik manifest manually.',
+      manifestUrl: 'https://raw.githubusercontent.com/traefik/traefik/v3.2/docs/content/reference/dynamic-configuration/kubernetes-crd.yml'
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get('/api/traefik/ingressroutes', async (c) => {
+  // 返回空数组，因为 CRD 可能不存在
+  return c.json([]);
+});
+
+app.post('/api/traefik/ingressroutes', async (c) => {
+  return c.json({ success: false, error: 'CRD not available' }, 501);
+});
+
+app.get('/api/traefik/middlewares', async (c) => {
+  return c.json([]);
+});
+
+app.get('/api/traefik/tlsoptions', async (c) => {
+  return c.json([]);
+});
+
 // 启动服务器
 const port = parseInt(process.env.PORT || '8080');
 console.log(`K8s API Server starting on port ${port}`);

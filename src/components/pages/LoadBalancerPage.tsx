@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
 import {
   Scale,
   Plus,
@@ -35,7 +36,6 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowRight,
-  ArrowUpDown,
   Network,
   Shield,
   Zap,
@@ -43,6 +43,9 @@ import {
   TrendingUp,
   Loader2,
   AlertTriangle,
+  Download,
+  Play,
+  FileCode,
 } from "lucide-react";
 import { useServices } from "@/hooks/use-k8s";
 
@@ -62,11 +65,44 @@ function formatAge(dateStr: string): string {
   return "刚刚";
 }
 
+// MetalLB API types
+interface MetalLBStatus {
+  installed: boolean;
+  namespace: string;
+  version: string;
+  speakerPods: number;
+  speakerReady: number;
+  webhookConfigured: boolean;
+}
+
+interface IPAddressPool {
+  name: string;
+  namespace: string;
+  addresses: string[];
+  autoAssign: boolean;
+  createdAt: string;
+}
+
+interface L2Advertisement {
+  name: string;
+  namespace: string;
+  ipAddressPools: string[];
+  interfaces: string[];
+  createdAt: string;
+}
+
+interface BGPAdvertisement {
+  name: string;
+  namespace: string;
+  ipAddressPools: string[];
+  peers: string[];
+  createdAt: string;
+}
+
 // Loading skeleton component
 function LoadingSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      {/* Page Header Skeleton */}
       <div className="flex items-center justify-between">
         <div>
           <div className="h-8 w-48 bg-slate-800 rounded" />
@@ -78,9 +114,8 @@ function LoadingSkeleton() {
         </div>
       </div>
       
-      {/* Metrics Cards Skeleton */}
-      <div className="grid grid-cols-6 gap-4">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
+      <div className="grid grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
           <div key={i} className="glass-card p-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="h-4 w-4 bg-slate-700 rounded" />
@@ -91,7 +126,6 @@ function LoadingSkeleton() {
         ))}
       </div>
       
-      {/* Tabs Skeleton */}
       <div className="border-b border-slate-800">
         <div className="flex gap-6">
           {[1, 2, 3, 4].map((i) => (
@@ -99,96 +133,77 @@ function LoadingSkeleton() {
           ))}
         </div>
       </div>
-      
-      {/* Content Skeleton */}
-      <div className="grid grid-cols-2 gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="glass-card p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-slate-700 rounded-lg" />
-                <div>
-                  <div className="h-5 w-32 bg-slate-700 rounded mb-1" />
-                  <div className="h-3 w-24 bg-slate-700 rounded" />
-                </div>
-              </div>
-              <div className="h-6 w-16 bg-slate-700 rounded" />
-            </div>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              {[1, 2, 3].map((j) => (
-                <div key={j}>
-                  <div className="h-3 w-12 bg-slate-700 rounded mb-1" />
-                  <div className="h-4 w-20 bg-slate-700 rounded" />
-                </div>
-              ))}
-            </div>
-            <div className="h-px bg-slate-800 my-4" />
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
-                <div className="h-5 w-16 bg-slate-700 rounded" />
-                <div className="h-5 w-20 bg-slate-700 rounded" />
-              </div>
-              <div className="h-8 w-24 bg-slate-700 rounded" />
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
 
-// Error state component
-function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
-  return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Scale className="text-sky-400 h-7 w-7" />
-            负载均衡器
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">管理集群负载均衡器，配置流量分发和健康检查</p>
-        </div>
-        <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={onRetry}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          重试
-        </Button>
-      </div>
-      
-      {/* Error Card */}
-      <div className="glass-card p-12 text-center">
-        <AlertTriangle className="h-16 w-16 mx-auto text-amber-500 mb-4" />
-        <h3 className="text-xl font-semibold text-white mb-2">无法加载负载均衡器数据</h3>
-        <p className="text-slate-400 mb-4">{error}</p>
-        <Button className="bg-sky-500 hover:bg-sky-600" onClick={onRetry}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          重新加载
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// Backend servers mock data (would come from endpoints in real scenario)
-const backendServers = [
-  { id: 1, name: "web-01", ip: "10.0.1.101", port: 8080, status: "healthy", weight: 100, connections: 245, latency: "12ms" },
-  { id: 2, name: "web-02", ip: "10.0.1.102", port: 8080, status: "healthy", weight: 100, connections: 198, latency: "15ms" },
-  { id: 3, name: "web-03", ip: "10.0.1.103", port: 8080, status: "healthy", weight: 100, connections: 256, latency: "11ms" },
-  { id: 4, name: "web-04", ip: "10.0.1.104", port: 8080, status: "unhealthy", weight: 0, connections: 0, latency: "-" },
-  { id: 5, name: "web-05", ip: "10.0.1.105", port: 8080, status: "healthy", weight: 100, connections: 178, latency: "14ms" },
-  { id: 6, name: "web-06", ip: "10.0.1.106", port: 8080, status: "healthy", weight: 100, connections: 201, latency: "13ms" },
-];
-
-// Mock metrics data
-const lbMetrics = {
-  totalRequests: "12.5M",
-  activeConnections: 1078,
-  bandwidth: "2.4 Gbps",
-  avgLatency: "13ms",
-  sslHandshakes: "892K",
-  errorRate: "0.02%",
-};
+// MetalLB Install YAML
+const METALLB_INSTALL_YAML = `# MetalLB Installation
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
+  name: metallb-system
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: bfdprofiles.metallb.io
+spec:
+  group: metallb.io
+  names:
+    kind: BFDProfile
+    listKind: BFDProfileList
+    plural: bfdprofiles
+    singular: bfdprofile
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.passiveMode
+      name: Passive Mode
+      type: boolean
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              detectMultiplier:
+                type: integer
+              echoInterval:
+                type: integer
+              echoMode:
+                type: boolean
+              minimumTtl:
+                type: integer
+              passiveMode:
+                type: boolean
+              receiveInterval:
+                type: integer
+              transmitInterval:
+                type: integer
+            type: object
+          status:
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+`;
 
 // K8s Service type
 interface K8sService {
@@ -206,19 +221,205 @@ export default function LoadBalancerPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showYamlDialog, setShowYamlDialog] = useState(false);
   const [selectedLB, setSelectedLB] = useState<K8sService | null>(null);
+  const [createType, setCreateType] = useState<"ipPool" | "l2" | "bgp">("ipPool");
+
+  // MetalLB state
+  const [metallbStatus, setMetallbStatus] = useState<MetalLBStatus | null>(null);
+  const [ipPools, setIpPools] = useState<IPAddressPool[]>([]);
+  const [l2Ads, setL2Ads] = useState<L2Advertisement[]>([]);
+  const [bgpAds, setBgpAds] = useState<BGPAdvertisement[]>([]);
+  const [metallbLoading, setMetallbLoading] = useState(true);
+  const [installing, setInstalling] = useState(false);
+
+  // Create form state
+  const [newPoolName, setNewPoolName] = useState("");
+  const [newPoolAddresses, setNewPoolAddresses] = useState("");
+  const [newL2Name, setNewL2Name] = useState("");
+  const [newL2Interfaces, setNewL2Interfaces] = useState("");
 
   // Fetch real K8s Services data
   const { data: services, isLoading, error, refetch } = useServices();
 
+  // Fetch all MetalLB data
+  const fetchAllMetalLBData = async () => {
+    setMetallbLoading(true);
+    try {
+      const [statusRes, poolsRes, l2Res, bgpRes] = await Promise.all([
+        fetch('/api/metallb/status?XTransformPort=8081'),
+        fetch('/api/metallb/ippools?XTransformPort=8081'),
+        fetch('/api/metallb/l2advertisements?XTransformPort=8081'),
+        fetch('/api/metallb/bgpadvertisements?XTransformPort=8081'),
+      ]);
+      
+      if (statusRes.ok) {
+        const data = await statusRes.json();
+        setMetallbStatus(data);
+      } else {
+        setMetallbStatus(null);
+      }
+      
+      if (poolsRes.ok) {
+        const data = await poolsRes.json();
+        setIpPools(data || []);
+      }
+      
+      if (l2Res.ok) {
+        const data = await l2Res.json();
+        setL2Ads(data || []);
+      }
+      
+      if (bgpRes.ok) {
+        const data = await bgpRes.json();
+        setBgpAds(data || []);
+      }
+    } catch {
+      setMetallbStatus(null);
+      setIpPools([]);
+      setL2Ads([]);
+      setBgpAds([]);
+    }
+    setMetallbLoading(false);
+  };
+
+  // Install MetalLB
+  const installMetalLB = async () => {
+    setInstalling(true);
+    try {
+      const response = await fetch('/api/metallb/install?XTransformPort=8081', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (response.ok) {
+        fetchAllMetalLBData();
+      }
+    } catch (e) {
+      console.error('Failed to install MetalLB:', e);
+    }
+    setInstalling(false);
+  };
+
+  // Create IP Pool
+  const createIPPool = async () => {
+    try {
+      const response = await fetch('/api/metallb/ippools?XTransformPort=8081', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newPoolName,
+          addresses: newPoolAddresses.split(',').map(a => a.trim())
+        })
+      });
+      if (response.ok) {
+        fetchAllMetalLBData();
+        setShowCreateDialog(false);
+        setNewPoolName("");
+        setNewPoolAddresses("");
+      }
+    } catch (e) {
+      console.error('Failed to create IP pool:', e);
+    }
+  };
+
+  // Create L2 Advertisement
+  const createL2Ad = async () => {
+    try {
+      const response = await fetch('/api/metallb/l2advertisements?XTransformPort=8081', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newL2Name,
+          interfaces: newL2Interfaces.split(',').map(i => i.trim()).filter(i => i)
+        })
+      });
+      if (response.ok) {
+        fetchAllMetalLBData();
+        setShowCreateDialog(false);
+        setNewL2Name("");
+        setNewL2Interfaces("");
+      }
+    } catch (e) {
+      console.error('Failed to create L2 advertisement:', e);
+    }
+  };
+
+  // Delete IP Pool
+  const deleteIPPool = async (name: string) => {
+    try {
+      const response = await fetch(`/api/metallb/ippools/${name}?XTransformPort=8081`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        fetchAllMetalLBData();
+      }
+    } catch (e) {
+      console.error('Failed to delete IP pool:', e);
+    }
+  };
+
+  // Delete L2 Advertisement
+  const deleteL2Ad = async (name: string) => {
+    try {
+      const response = await fetch(`/api/metallb/l2advertisements/${name}?XTransformPort=8081`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        fetchAllMetalLBData();
+      }
+    } catch (e) {
+      console.error('Failed to delete L2 advertisement:', e);
+    }
+  };
+
+  // Initial data fetch
+  useEffect(() => {
+    const loadData = async () => {
+      setMetallbLoading(true);
+      try {
+        const [statusRes, poolsRes, l2Res, bgpRes] = await Promise.all([
+          fetch('/api/metallb/status?XTransformPort=8081'),
+          fetch('/api/metallb/ippools?XTransformPort=8081'),
+          fetch('/api/metallb/l2advertisements?XTransformPort=8081'),
+          fetch('/api/metallb/bgpadvertisements?XTransformPort=8081'),
+        ]);
+        
+        if (statusRes.ok) {
+          const data = await statusRes.json();
+          setMetallbStatus(data);
+        } else {
+          setMetallbStatus(null);
+        }
+        
+        if (poolsRes.ok) {
+          const data = await poolsRes.json();
+          setIpPools(data || []);
+        }
+        
+        if (l2Res.ok) {
+          const data = await l2Res.json();
+          setL2Ads(data || []);
+        }
+        
+        if (bgpRes.ok) {
+          const data = await bgpRes.json();
+          setBgpAds(data || []);
+        }
+      } catch {
+        setMetallbStatus(null);
+        setIpPools([]);
+        setL2Ads([]);
+        setBgpAds([]);
+      }
+      setMetallbLoading(false);
+    };
+    
+    loadData();
+  }, []);
+
   // Show loading skeleton
   if (isLoading) {
     return <LoadingSkeleton />;
-  }
-
-  // Show error state
-  if (error) {
-    return <ErrorState error={error.message || "未知错误"} onRetry={() => refetch()} />;
   }
 
   // Ensure services is an array
@@ -234,6 +435,11 @@ export default function LoadBalancerPage() {
       lb.namespace.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleRefresh = () => {
+    refetch();
+    fetchAllMetalLBData();
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -243,78 +449,115 @@ export default function LoadBalancerPage() {
             <Scale className="text-sky-400 h-7 w-7" />
             负载均衡器
           </h1>
-          <p className="text-slate-400 text-sm mt-1">管理集群负载均衡器，配置流量分发和健康检查</p>
+          <p className="text-slate-400 text-sm mt-1">管理集群负载均衡器，基于 MetalLB 提供外部 IP 分配</p>
         </div>
         <div className="flex gap-3">
-          <Button className="bg-sky-500 hover:bg-sky-600 text-white" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            创建负载均衡
-          </Button>
           <Button 
             variant="outline" 
             className="border-slate-700 text-slate-300 hover:bg-slate-800"
-            onClick={() => refetch()}
+            onClick={handleRefresh}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             刷新状态
           </Button>
+          {!metallbStatus?.installed ? (
+            <Button className="bg-sky-500 hover:bg-sky-600 text-white" onClick={installMetalLB} disabled={installing}>
+              {installing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  安装中...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  安装 MetalLB
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button className="bg-sky-500 hover:bg-sky-600 text-white" onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              创建资源
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-6 gap-4">
+      {/* MetalLB Status Card */}
+      {metallbStatus?.installed && (
         <div className="glass-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Activity className="h-4 w-4 text-sky-400" />
-            <p className="text-xs text-slate-400">总请求数</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-green-500/10 rounded-lg">
+                <CheckCircle2 className="h-6 w-6 text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">MetalLB 已安装</h3>
+                <p className="text-sm text-slate-400">
+                  版本: {metallbStatus.version || "v0.14.5"} | 
+                  Speaker Pods: {metallbStatus.speakerReady}/{metallbStatus.speakerPods}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-white">{ipPools.length}</p>
+                <p className="text-xs text-slate-400">IP 地址池</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-white">{l2Ads.length}</p>
+                <p className="text-xs text-slate-400">L2 广告</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-white">{bgpAds.length}</p>
+                <p className="text-xs text-slate-400">BGP 广告</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-amber-400">{loadBalancers.length}</p>
+                <p className="text-xs text-slate-400">LB 服务</p>
+              </div>
+            </div>
           </div>
-          <p className="text-xl font-bold text-white">{lbMetrics.totalRequests}</p>
         </div>
-        <div className="glass-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Network className="h-4 w-4 text-purple-400" />
-            <p className="text-xs text-slate-400">活跃连接</p>
+      )}
+
+      {!metallbStatus?.installed && !metallbLoading && (
+        <div className="glass-card p-8 text-center border-amber-500/30">
+          <AlertTriangle className="h-12 w-12 mx-auto text-amber-400 mb-4" />
+          <h3 className="text-lg font-semibold text-white mb-2">MetalLB 未安装</h3>
+          <p className="text-slate-400 text-sm mb-4">
+            MetalLB 是 Kubernetes 的负载均衡器实现，使用标准路由协议 (Layer 2/BGP) 为服务分配外部 IP。
+          </p>
+          <div className="flex justify-center gap-3">
+            <Button variant="outline" className="border-slate-700 text-slate-300" onClick={() => setShowYamlDialog(true)}>
+              <FileCode className="h-4 w-4 mr-2" />
+              查看 YAML
+            </Button>
+            <Button className="bg-sky-500 hover:bg-sky-600" onClick={installMetalLB} disabled={installing}>
+              {installing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  安装中...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  一键安装
+                </>
+              )}
+            </Button>
           </div>
-          <p className="text-xl font-bold text-white">{lbMetrics.activeConnections}</p>
         </div>
-        <div className="glass-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Zap className="h-4 w-4 text-amber-400" />
-            <p className="text-xs text-slate-400">带宽</p>
-          </div>
-          <p className="text-xl font-bold text-white">{lbMetrics.bandwidth}</p>
-        </div>
-        <div className="glass-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="h-4 w-4 text-green-400" />
-            <p className="text-xs text-slate-400">平均延迟</p>
-          </div>
-          <p className="text-xl font-bold text-white">{lbMetrics.avgLatency}</p>
-        </div>
-        <div className="glass-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Shield className="h-4 w-4 text-cyan-400" />
-            <p className="text-xs text-slate-400">SSL 握手</p>
-          </div>
-          <p className="text-xl font-bold text-white">{lbMetrics.sslHandshakes}</p>
-        </div>
-        <div className="glass-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="h-4 w-4 text-rose-400" />
-            <p className="text-xs text-slate-400">错误率</p>
-          </div>
-          <p className="text-xl font-bold text-white">{lbMetrics.errorRate}</p>
-        </div>
-      </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-slate-800">
         <div className="flex gap-6">
           {[
-            { id: "overview", label: "负载均衡器", icon: Scale },
-            { id: "backends", label: "后端服务器", icon: Server },
-            { id: "monitoring", label: "监控面板", icon: Activity },
-            { id: "ssl", label: "SSL 证书", icon: Shield },
+            { id: "overview", label: "负载均衡服务", icon: Scale, count: loadBalancers.length },
+            { id: "ippools", label: "IP 地址池", icon: Network, count: ipPools.length },
+            { id: "l2", label: "Layer 2 模式", icon: Zap, count: l2Ads.length },
+            { id: "bgp", label: "BGP 模式", icon: Globe, count: bgpAds.length },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -327,12 +570,13 @@ export default function LoadBalancerPage() {
             >
               <tab.icon className="h-4 w-4" />
               {tab.label}
+              <span className="text-xs text-slate-500">({tab.count})</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content - LoadBalancer Services */}
       {activeTab === "overview" && (
         <div className="space-y-4">
           <div className="relative w-80">
@@ -346,376 +590,470 @@ export default function LoadBalancerPage() {
           </div>
 
           {filteredLBs.length > 0 ? (
-            <div className="grid grid-cols-2 gap-4">
-              {filteredLBs.map((lb) => (
-                <div key={`${lb.namespace}-${lb.name}`} className="glass-card p-5 hover:border-sky-500/50 transition-all">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-amber-500/10">
-                        <Scale className="h-5 w-5 text-amber-400" />
-                      </div>
-                      <div>
+            <div className="glass-card overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">名称</th>
+                    <th className="px-6 py-4 font-medium">命名空间</th>
+                    <th className="px-6 py-4 font-medium">类型</th>
+                    <th className="px-6 py-4 font-medium">ClusterIP</th>
+                    <th className="px-6 py-4 font-medium">外部 IP</th>
+                    <th className="px-6 py-4 font-medium">端口</th>
+                    <th className="px-6 py-4 font-medium">存活时间</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {filteredLBs.map((lb) => (
+                    <tr key={`${lb.namespace}-${lb.name}`} className="hover:bg-slate-800/20 transition-colors">
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-white">{lb.name}</h3>
-                          <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">
-                            LoadBalancer
-                          </Badge>
+                          <Scale className="h-4 w-4 text-amber-400" />
+                          <span className="font-mono text-sky-400">{lb.name}</span>
                         </div>
-                        <p className="text-xs text-slate-500 font-mono">{lb.clusterIP}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
-                        健康
-                      </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-slate-900 border-slate-700">
-                          <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
-                            <Eye className="h-4 w-4 mr-2" /> 查看详情
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
-                            <Edit className="h-4 w-4 mr-2" /> 编辑配置
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
-                            <Settings className="h-4 w-4 mr-2" /> 健康检查
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-rose-400 focus:bg-slate-800">
-                            <Trash2 className="h-4 w-4 mr-2" /> 删除
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-                    <div>
-                      <p className="text-slate-500 text-xs">外部 IP</p>
-                      <p className="text-white font-mono text-xs">{lb.externalIP || "Pending"}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500 text-xs">命名空间</p>
-                      <p className="text-white">{lb.namespace}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500 text-xs">创建时间</p>
-                      <p className="text-white">{formatAge(lb.createdAt)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {lb.ports && lb.ports.length > 0 ? (
-                        lb.ports.map((port, idx) => (
-                          <Badge key={idx} className="bg-slate-700 text-slate-300">
-                            {port.port}/{port.protocol}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-slate-500 text-xs">无端口</span>
-                      )}
-                      {lb.selector && Object.keys(lb.selector).length > 0 && (
-                        <Badge className="bg-sky-500/10 text-sky-400 border-sky-500/20">
-                          <Globe className="h-3 w-3 mr-1" /> Selector
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge className="bg-slate-700 text-slate-300">{lb.namespace}</Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">
+                          LoadBalancer
                         </Badge>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-sky-400 hover:text-sky-300"
-                      onClick={() => setSelectedLB(lb)}
-                    >
-                      查看后端 <ArrowRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-400">{lb.clusterIP}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-green-400">{lb.externalIP || "Pending"}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {lb.ports && lb.ports.length > 0 ? (
+                            lb.ports.map((p, i) => (
+                              <Badge key={i} className="bg-slate-700 text-slate-300 text-xs">
+                                {p.port}/{p.protocol}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">{formatAge(lb.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="glass-card p-12 text-center">
               <Scale className="h-16 w-16 mx-auto text-slate-600 mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">没有找到 LoadBalancer 类型的服务</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">没有 LoadBalancer 类型的服务</h3>
               <p className="text-slate-400 mb-4">
                 {searchQuery ? "尝试修改搜索条件" : "创建一个 LoadBalancer 类型的 Service 来使用负载均衡功能"}
               </p>
-              <Button className="bg-sky-500 hover:bg-sky-600" onClick={() => setShowCreateDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                创建负载均衡
-              </Button>
             </div>
           )}
         </div>
       )}
 
-      {activeTab === "backends" && (
-        <div className="glass-card overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">后端服务器池</h3>
-            <Button size="sm" className="bg-sky-500 hover:bg-sky-600">
-              <Plus className="h-4 w-4 mr-2" /> 添加后端
-            </Button>
+      {/* Tab Content - IP Pools */}
+      {activeTab === "ippools" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-slate-400 text-sm">管理 MetalLB 的 IP 地址池，用于分配给 LoadBalancer 服务</p>
+            {metallbStatus?.installed && (
+              <Button className="bg-sky-500 hover:bg-sky-600" onClick={() => { setCreateType("ipPool"); setShowCreateDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                创建 IP 池
+              </Button>
+            )}
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-4 font-medium">服务器</th>
-                <th className="px-6 py-4 font-medium">IP:端口</th>
-                <th className="px-6 py-4 font-medium">状态</th>
-                <th className="px-6 py-4 font-medium">权重</th>
-                <th className="px-6 py-4 font-medium">连接数</th>
-                <th className="px-6 py-4 font-medium">延迟</th>
-                <th className="px-6 py-4 font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {backendServers.map((server) => (
-                <tr key={server.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <Server className="h-4 w-4 text-sky-400" />
-                      <span className="font-semibold text-white">{server.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-slate-400 text-xs">
-                    {server.ip}:{server.port}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          server.status === "healthy" ? "bg-green-500 status-pulse" : "bg-rose-500"
-                        }`}
-                      />
-                      <Badge
-                        className={`${
-                          server.status === "healthy"
-                            ? "bg-green-500/10 text-green-400 border-green-500/20"
-                            : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                        }`}
-                      >
-                        {server.status === "healthy" ? "健康" : "故障"}
-                      </Badge>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-white">{server.weight}</span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-400">{server.connections}</td>
-                  <td className="px-6 py-4 text-slate-400">{server.latency}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                        <ArrowUpDown className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+          {ipPools.length > 0 ? (
+            <div className="glass-card overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">名称</th>
+                    <th className="px-6 py-4 font-medium">地址范围</th>
+                    <th className="px-6 py-4 font-medium">自动分配</th>
+                    <th className="px-6 py-4 font-medium">存活时间</th>
+                    <th className="px-6 py-4 font-medium">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {ipPools.map((pool) => (
+                    <tr key={pool.name} className="hover:bg-slate-800/20 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Network className="h-4 w-4 text-sky-400" />
+                          <span className="font-mono text-sky-400">{pool.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {pool.addresses.map((addr, i) => (
+                            <Badge key={i} className="bg-sky-500/10 text-sky-400 text-xs font-mono">
+                              {addr}
+                            </Badge>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge className={pool.autoAssign ? "bg-green-500/10 text-green-400" : "bg-slate-500/10 text-slate-400"}>
+                          {pool.autoAssign ? "启用" : "禁用"}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">{formatAge(pool.createdAt)}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-rose-400"
+                            onClick={() => deleteIPPool(pool.name)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="glass-card p-12 text-center">
+              <Network className="h-16 w-16 mx-auto text-slate-600 mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-2">没有 IP 地址池</h3>
+              <p className="text-slate-400">创建 IP 地址池来为 LoadBalancer 服务分配外部 IP</p>
+            </div>
+          )}
         </div>
       )}
 
-      {activeTab === "monitoring" && (
-        <div className="grid grid-cols-2 gap-6">
-          <div className="glass-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">流量趋势</h3>
-            <div className="h-64 flex items-center justify-center text-slate-500">
-              <div className="text-center">
-                <TrendingUp className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>流量监控图表</p>
-                <p className="text-xs">(需要集成 Prometheus)</p>
-              </div>
-            </div>
+      {/* Tab Content - L2 Advertisements */}
+      {activeTab === "l2" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-slate-400 text-sm">配置 Layer 2 模式的 IP 广告（适用于小型网络）</p>
+            {metallbStatus?.installed && (
+              <Button className="bg-sky-500 hover:bg-sky-600" onClick={() => { setCreateType("l2"); setShowCreateDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                创建 L2 广告
+              </Button>
+            )}
           </div>
-          <div className="glass-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">响应时间分布</h3>
-            <div className="h-64 flex items-center justify-center text-slate-500">
-              <div className="text-center">
-                <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>延迟分布图表</p>
-                <p className="text-xs">(需要集成 Grafana)</p>
-              </div>
+
+          {l2Ads.length > 0 ? (
+            <div className="glass-card overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">名称</th>
+                    <th className="px-6 py-4 font-medium">关联 IP 池</th>
+                    <th className="px-6 py-4 font-medium">网络接口</th>
+                    <th className="px-6 py-4 font-medium">存活时间</th>
+                    <th className="px-6 py-4 font-medium">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {l2Ads.map((ad) => (
+                    <tr key={ad.name} className="hover:bg-slate-800/20 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-4 w-4 text-amber-400" />
+                          <span className="font-mono text-sky-400">{ad.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {ad.ipAddressPools?.map((pool, i) => (
+                            <Badge key={i} className="bg-sky-500/10 text-sky-400 text-xs">
+                              {pool}
+                            </Badge>
+                          )) || <span className="text-slate-500 text-xs">全部</span>}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {ad.interfaces?.length > 0 ? (
+                            ad.interfaces.map((iface, i) => (
+                              <Badge key={i} className="bg-purple-500/10 text-purple-400 text-xs font-mono">
+                                {iface}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-slate-500 text-xs">全部接口</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">{formatAge(ad.createdAt)}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-slate-400 hover:text-rose-400"
+                            onClick={() => deleteL2Ad(ad.name)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-          <div className="glass-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">健康检查日志</h3>
-            <div className="space-y-2 max-h-48 overflow-auto">
-              {[
-                { time: "14:30:05", target: "web-01:8080", result: "PASS", latency: "12ms" },
-                { time: "14:30:05", target: "web-02:8080", result: "PASS", latency: "15ms" },
-                { time: "14:30:05", target: "web-04:8080", result: "FAIL", latency: "timeout" },
-                { time: "14:30:00", target: "web-03:8080", result: "PASS", latency: "11ms" },
-              ].map((log, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs p-2 bg-slate-800/50 rounded">
-                  <span className="text-slate-500">{log.time}</span>
-                  <span className="font-mono text-slate-400">{log.target}</span>
-                  <span className={log.result === "PASS" ? "text-green-400" : "text-rose-400"}>
-                    {log.result}
-                  </span>
-                  <span className="text-slate-400">{log.latency}</span>
-                </div>
-              ))}
+          ) : (
+            <div className="glass-card p-12 text-center">
+              <Zap className="h-16 w-16 mx-auto text-slate-600 mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-2">没有 Layer 2 广告</h3>
+              <p className="text-slate-400">Layer 2 模式使用 ARP/NDP 协议广播 IP 地址</p>
             </div>
-          </div>
-          <div className="glass-card p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">调度算法分布</h3>
-            <div className="space-y-3">
-              {[
-                { name: "Round Robin", count: 2, percentage: 50 },
-                { name: "Least Connections", count: 1, percentage: 25 },
-                { name: "Source IP Hash", count: 1, percentage: 25 },
-              ].map((algo, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-white">{algo.name}</span>
-                    <span className="text-slate-400">{algo.count} 个</span>
-                  </div>
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-sky-500"
-                      style={{ width: `${algo.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {activeTab === "ssl" && (
-        <div className="glass-card overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">SSL/TLS 证书管理</h3>
-            <Button size="sm" className="bg-sky-500 hover:bg-sky-600">
-              <Plus className="h-4 w-4 mr-2" /> 上传证书
-            </Button>
+      {/* Tab Content - BGP Advertisements */}
+      {activeTab === "bgp" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-slate-400 text-sm">配置 BGP 模式的 IP 广告（适用于大型网络）</p>
+            {metallbStatus?.installed && (
+              <Button className="bg-sky-500 hover:bg-sky-600" onClick={() => { setCreateType("bgp"); setShowCreateDialog(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                创建 BGP 广告
+              </Button>
+            )}
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-4 font-medium">域名</th>
-                <th className="px-6 py-4 font-medium">颁发机构</th>
-                <th className="px-6 py-4 font-medium">有效期</th>
-                <th className="px-6 py-4 font-medium">状态</th>
-                <th className="px-6 py-4 font-medium">关联 LB</th>
-                <th className="px-6 py-4 font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {[
-                { domain: "*.example.com", issuer: "Let's Encrypt", expires: "2024-03-15", status: "valid", lb: "web-lb-prod" },
-                { domain: "api.example.com", issuer: "DigiCert", expires: "2024-06-20", status: "valid", lb: "api-lb-prod" },
-                { domain: "*.internal.com", issuer: "Self-signed", expires: "2025-01-01", status: "valid", lb: "-" },
-              ].map((cert, idx) => (
-                <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4 font-mono text-sky-400">{cert.domain}</td>
-                  <td className="px-6 py-4 text-slate-400">{cert.issuer}</td>
-                  <td className="px-6 py-4 text-slate-400">{cert.expires}</td>
-                  <td className="px-6 py-4">
-                    <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
-                      有效
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-slate-400">{cert.lb}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+          {bgpAds.length > 0 ? (
+            <div className="glass-card overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">名称</th>
+                    <th className="px-6 py-4 font-medium">关联 IP 池</th>
+                    <th className="px-6 py-4 font-medium">BGP Peers</th>
+                    <th className="px-6 py-4 font-medium">存活时间</th>
+                    <th className="px-6 py-4 font-medium">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {bgpAds.map((ad) => (
+                    <tr key={ad.name} className="hover:bg-slate-800/20 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-4 w-4 text-purple-400" />
+                          <span className="font-mono text-sky-400">{ad.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {ad.ipAddressPools?.map((pool, i) => (
+                            <Badge key={i} className="bg-sky-500/10 text-sky-400 text-xs">
+                              {pool}
+                            </Badge>
+                          )) || <span className="text-slate-500 text-xs">全部</span>}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {ad.peers?.length > 0 ? (
+                            ad.peers.map((peer, i) => (
+                              <Badge key={i} className="bg-purple-500/10 text-purple-400 text-xs">
+                                {peer}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-slate-500 text-xs">全部 Peers</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">{formatAge(ad.createdAt)}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-400">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="glass-card p-12 text-center">
+              <Globe className="h-16 w-16 mx-auto text-slate-600 mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-2">没有 BGP 广告</h3>
+              <p className="text-slate-400">BGP 模式适用于数据中心环境，需要配置 BGP Peers</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Create LB Dialog */}
+      {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <Scale className="h-5 w-5 text-sky-400" />
-              创建负载均衡器
+              <Plus className="h-5 w-5 text-sky-400" />
+              {createType === "ipPool" && "创建 IP 地址池"}
+              {createType === "l2" && "创建 Layer 2 广告"}
+              {createType === "bgp" && "创建 BGP 广告"}
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              配置新的负载均衡器实例
+              {createType === "ipPool" && "配置 MetalLB 的 IP 地址池，用于分配给 LoadBalancer 服务"}
+              {createType === "l2" && "配置 Layer 2 模式的 IP 广告"}
+              {createType === "bgp" && "配置 BGP 模式的 IP 广告"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+
+          {createType === "ipPool" && (
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">名称</label>
-                <Input placeholder="my-lb" className="bg-slate-800 border-slate-700" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">命名空间</label>
-                <Input placeholder="default" className="bg-slate-800 border-slate-700" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">类型</label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" className="border-sky-500 text-sky-400 bg-sky-500/10">
-                  Layer 7 (HTTP/HTTPS)
-                </Button>
-                <Button variant="outline" className="border-slate-700 text-slate-400">
-                  Layer 4 (TCP/UDP)
-                </Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">调度算法</label>
-                <select className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
-                  <option>Round Robin</option>
-                  <option>Least Connections</option>
-                  <option>Source IP Hash</option>
-                  <option>Weighted Round Robin</option>
-                </select>
+                <Label className="text-slate-300">名称</Label>
+                <Input
+                  value={newPoolName}
+                  onChange={(e) => setNewPoolName(e.target.value)}
+                  placeholder="my-ip-pool"
+                  className="bg-slate-800 border-slate-700"
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">监听端口</label>
-                <Input placeholder="80, 443" className="bg-slate-800 border-slate-700" />
+                <Label className="text-slate-300">地址范围 (逗号分隔)</Label>
+                <Input
+                  value={newPoolAddresses}
+                  onChange={(e) => setNewPoolAddresses(e.target.value)}
+                  placeholder="192.168.1.100-192.168.1.200 或 192.168.1.0/24"
+                  className="bg-slate-800 border-slate-700"
+                />
+                <p className="text-xs text-slate-500">
+                  支持格式: IP范围 (如 192.168.1.100-192.168.1.200) 或 CIDR (如 192.168.1.0/24)
+                </p>
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">后端服务选择器</label>
-              <Input placeholder="app=web" className="bg-slate-800 border-slate-700" />
+          )}
+
+          {createType === "l2" && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">名称</Label>
+                <Input
+                  value={newL2Name}
+                  onChange={(e) => setNewL2Name(e.target.value)}
+                  placeholder="my-l2-advertisement"
+                  className="bg-slate-800 border-slate-700"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-300">网络接口 (逗号分隔，可选)</Label>
+                <Input
+                  value={newL2Interfaces}
+                  onChange={(e) => setNewL2Interfaces(e.target.value)}
+                  placeholder="eth0, eth1"
+                  className="bg-slate-800 border-slate-700"
+                />
+                <p className="text-xs text-slate-500">
+                  留空则使用所有接口
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="ssl-enabled" className="rounded border-slate-700" />
-              <label htmlFor="ssl-enabled" className="text-sm text-slate-400">
-                启用 SSL/TLS 终止
-              </label>
+          )}
+
+          {createType === "bgp" && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">名称</Label>
+                <Input
+                  placeholder="my-bgp-advertisement"
+                  className="bg-slate-800 border-slate-700"
+                />
+              </div>
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5" />
+                  <p className="text-xs text-amber-400">
+                    BGP 模式需要先配置 BGP Peers。请使用 YAML 编辑器创建 BGPPeer 资源。
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="border-slate-700 text-slate-300">
               取消
             </Button>
-            <Button className="bg-sky-500 hover:bg-sky-600" onClick={() => setShowCreateDialog(false)}>
+            <Button
+              className="bg-sky-500 hover:bg-sky-600"
+              onClick={() => {
+                if (createType === "ipPool") createIPPool();
+                else if (createType === "l2") createL2Ad();
+                else setShowCreateDialog(false);
+              }}
+            >
               创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* YAML Dialog */}
+      <Dialog open={showYamlDialog} onOpenChange={setShowYamlDialog}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <FileCode className="h-5 w-5 text-sky-400" />
+              MetalLB 安装 YAML
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              以下是 MetalLB 的安装清单（已简化显示）
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            <pre className="text-xs text-slate-300 font-mono bg-slate-950 p-4 rounded-lg whitespace-pre-wrap">
+              {METALLB_INSTALL_YAML}
+            </pre>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                navigator.clipboard.writeText(METALLB_INSTALL_YAML);
+              }}
+              className="border-slate-700 text-slate-300"
+            >
+              复制 YAML
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const blob = new Blob([METALLB_INSTALL_YAML], { type: 'text/yaml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'metallb-install.yaml';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="border-slate-700 text-slate-300"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              下载
+            </Button>
+            <Button className="bg-sky-500 hover:bg-sky-600" onClick={() => { setShowYamlDialog(false); installMetalLB(); }}>
+              <Play className="h-4 w-4 mr-2" />
+              一键安装
             </Button>
           </DialogFooter>
         </DialogContent>

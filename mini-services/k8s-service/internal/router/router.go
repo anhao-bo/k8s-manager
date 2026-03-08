@@ -135,6 +135,29 @@ func SetupRouter(h *handlers.Handler) *gin.Engine {
 
                 // 中间件状态
                 api.GET("/middleware/status", h.GetMiddlewareStatus)
+
+                // MetalLB 相关路由
+                api.GET("/metallb/status", h.GetMetalLBStatus)
+                api.POST("/metallb/install", h.InstallMetalLB)
+                api.GET("/metallb/ippools", h.GetIPPools)
+                api.POST("/metallb/ippools", h.CreateIPPool)
+                api.GET("/metallb/ippools/:name", h.GetIPPool)
+                api.DELETE("/metallb/ippools/:name", h.DeleteIPPool)
+                api.GET("/metallb/l2advertisements", h.GetL2Advertisements)
+                api.POST("/metallb/l2advertisements", h.CreateL2Advertisement)
+                api.DELETE("/metallb/l2advertisements/:name", h.DeleteL2Advertisement)
+                api.GET("/metallb/bgpadvertisements", h.GetBGPAdvertisements)
+                api.POST("/metallb/bgpadvertisements", h.CreateBGPAdvertisement)
+                api.DELETE("/metallb/bgpadvertisements/:name", h.DeleteBGPAdvertisement)
+
+                // Traefik 相关路由
+                api.GET("/traefik/status", h.GetTraefikStatus)
+                api.POST("/traefik/install", h.InstallTraefik)
+                api.GET("/traefik/ingressroutes", h.GetIngressRoutes)
+                api.POST("/traefik/ingressroutes", h.CreateIngressRoute)
+                api.DELETE("/traefik/ingressroutes", h.DeleteIngressRoute)
+                api.GET("/traefik/middlewares", h.GetTraefikMiddlewares)
+                api.GET("/traefik/tlsoptions", h.GetTLSOptions)
         }
 
         // 健康检查

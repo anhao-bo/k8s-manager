@@ -49,3 +49,16 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Kubernetes
+*.kube/config
+kubeconfig.yaml
+.kube/
+
+# Binaries
+/k8s-service
+mini-services/k8s-service/k8s-service
+*.log
+!**/k8s-service/**/*.go
+
+# Environment
+.env.local

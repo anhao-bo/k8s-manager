@@ -680,3 +680,77 @@ type ErrorResponse struct {
         Error   string `json:"error"`
         Hint    string `json:"hint,omitempty"`
 }
+
+// ==================== Traefik 相关 ====================
+
+// TraefikStatus Traefik安装状态
+type TraefikStatus struct {
+        Installed     bool   `json:"installed"`
+        Namespace     string `json:"namespace"`
+        Version       string `json:"version"`
+        Dashboard     string `json:"dashboard"`
+        Replicas      int32  `json:"replicas"`
+        ReadyReplicas int32  `json:"readyReplicas"`
+}
+
+// IngressRouteInfo Traefik IngressRoute信息
+type IngressRouteInfo struct {
+        Name        string                 `json:"name"`
+        Namespace   string                 `json:"namespace"`
+        EntryPoints []string               `json:"entryPoints"`
+        Routes      []IngressRouteRoute    `json:"routes"`
+        TLS         bool                   `json:"tls"`
+        CreatedAt   time.Time              `json:"createdAt"`
+}
+
+// IngressRouteRoute IngressRoute路由规则
+type IngressRouteRoute struct {
+        Match    string   `json:"match"`
+        Kind     string   `json:"kind"`
+        Services []string `json:"services"`
+}
+
+// CreateIngressRouteRequest 创建IngressRoute请求
+type CreateIngressRouteRequest struct {
+        Namespace   string              `json:"namespace"`
+        Name        string              `json:"name" binding:"required"`
+        EntryPoints []string            `json:"entryPoints"`
+        Routes      []RouteSpec         `json:"routes"`
+        TLS         *TLSOptionSpec      `json:"tls,omitempty"`
+}
+
+// RouteSpec 路由规格
+type RouteSpec struct {
+        Match    string        `json:"match"`
+        Kind     string        `json:"kind"`
+        Services []ServiceSpec `json:"services"`
+}
+
+// ServiceSpec 服务规格
+type ServiceSpec struct {
+        Name     string `json:"name"`
+        Port     int32  `json:"port"`
+        Scheme   string `json:"scheme,omitempty"`
+}
+
+// TLSOptionSpec TLS选项规格
+type TLSOptionSpec struct {
+        SecretName string `json:"secretName,omitempty"`
+}
+
+// TraefikMiddlewareInfo Traefik Middleware信息
+type TraefikMiddlewareInfo struct {
+        Name      string    `json:"name"`
+        Namespace string    `json:"namespace"`
+        Type      string    `json:"type"`
+        CreatedAt time.Time `json:"createdAt"`
+}
+
+// TLSOptionInfo TLSOption信息
+type TLSOptionInfo struct {
+        Name         string    `json:"name"`
+        Namespace    string    `json:"namespace"`
+        MinVersion   string    `json:"minVersion"`
+        CipherSuites []string  `json:"cipherSuites"`
+        CreatedAt    time.Time `json:"createdAt"`
+}

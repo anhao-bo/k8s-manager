@@ -73,6 +73,7 @@ import APMMonitorPage from "@/components/pages/APMMonitorPage";
 import IngressPage from "@/components/pages/IngressPage";
 import JobsPage from "@/components/pages/JobsPage";
 import CronJobsPage from "@/components/pages/CronJobsPage";
+import TraefikPage from "@/components/pages/TraefikPage";
 
 const menuItems = [
   // 核心
@@ -90,6 +91,7 @@ const menuItems = [
   // 网络
   { title: "服务与路由", icon: Network, page: "services", group: "网络" },
   { title: "Ingress", icon: Globe, page: "ingress", group: "网络" },
+  { title: "Traefik 网关", icon: Zap, page: "traefik", group: "网络" },
   { title: "负载均衡器", icon: Scale, page: "loadbalancer", group: "网络" },
   // 配置与存储
   { title: "ConfigMaps", icon: Database, page: "configmaps", group: "配置与存储" },
@@ -175,6 +177,8 @@ export default function K8sManager() {
         return <JobsPage />;
       case "cronjobs":
         return <CronJobsPage />;
+      case "traefik":
+        return <TraefikPage />;
       default:
         return <DashboardPage />;
     }

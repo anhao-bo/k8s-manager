@@ -2357,35 +2357,62 @@ func (c *Client) GetResourceYaml(kind, namespace, name string) (string, error) {
         ctx := context.Background()
         
         var obj runtime.Object
+        var apiVersion, kindStr string
         var err error
         
         switch strings.ToLower(kind) {
         case "pod", "pods":
                 obj, err = c.Clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "v1"
+                kindStr = "Pod"
         case "deployment", "deployments":
                 obj, err = c.Clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "apps/v1"
+                kindStr = "Deployment"
         case "service", "services":
                 obj, err = c.Clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "v1"
+                kindStr = "Service"
         case "configmap", "configmaps":
                 obj, err = c.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "v1"
+                kindStr = "ConfigMap"
         case "secret", "secrets":
                 obj, err = c.Clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "v1"
+                kindStr = "Secret"
         case "namespace", "namespaces":
                 obj, err = c.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "v1"
+                kindStr = "Namespace"
         case "node", "nodes":
                 obj, err = c.Clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "v1"
+                kindStr = "Node"
         case "statefulset", "statefulsets":
                 obj, err = c.Clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "apps/v1"
+                kindStr = "StatefulSet"
         case "daemonset", "daemonsets":
                 obj, err = c.Clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "apps/v1"
+                kindStr = "DaemonSet"
         case "job", "jobs":
                 obj, err = c.Clientset.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "batch/v1"
+                kindStr = "Job"
         case "cronjob", "cronjobs":
                 obj, err = c.Clientset.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "batch/v1"
+                kindStr = "CronJob"
         case "ingress", "ingresses":
                 obj, err = c.Clientset.NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "networking.k8s.io/v1"
+                kindStr = "Ingress"
         case "persistentvolumeclaim", "pvcs", "persistentvolumeclaims":
                 obj, err = c.Clientset.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
+                apiVersion = "v1"
+                kindStr = "PersistentVolumeClaim"
         default:
                 return "", fmt.Errorf("unsupported resource kind: %s", kind)
         }
@@ -2400,7 +2427,10 @@ func (c *Client) GetResourceYaml(kind, namespace, name string) (string, error) {
                 return "", fmt.Errorf("failed to marshal to yaml: %w", err)
         }
         
-        return string(yamlBytes), nil
+        // 添加 apiVersion 和 kind 到 YAML 开头
+        result := fmt.Sprintf("apiVersion: %s\nkind: %s\n%s", apiVersion, kindStr, string(yamlBytes))
+        
+        return result, nil
 }
 
 // ==================== CronJob操作 ====================

@@ -13,6 +13,62 @@ interface ResourceYamlEditorProps {
   onClose?: () => void;
 }
 
+// 资源类型到 apiVersion 的映射
+const kindToApiVersion: Record<string, { apiVersion: string; kind: string }> = {
+  pod: { apiVersion: "v1", kind: "Pod" },
+  pods: { apiVersion: "v1", kind: "Pod" },
+  deployment: { apiVersion: "apps/v1", kind: "Deployment" },
+  deployments: { apiVersion: "apps/v1", kind: "Deployment" },
+  statefulset: { apiVersion: "apps/v1", kind: "StatefulSet" },
+  statefulsets: { apiVersion: "apps/v1", kind: "StatefulSet" },
+  daemonset: { apiVersion: "apps/v1", kind: "DaemonSet" },
+  daemonsets: { apiVersion: "apps/v1", kind: "DaemonSet" },
+  service: { apiVersion: "v1", kind: "Service" },
+  services: { apiVersion: "v1", kind: "Service" },
+  configmap: { apiVersion: "v1", kind: "ConfigMap" },
+  configmaps: { apiVersion: "v1", kind: "ConfigMap" },
+  secret: { apiVersion: "v1", kind: "Secret" },
+  secrets: { apiVersion: "v1", kind: "Secret" },
+  namespace: { apiVersion: "v1", kind: "Namespace" },
+  namespaces: { apiVersion: "v1", kind: "Namespace" },
+  job: { apiVersion: "batch/v1", kind: "Job" },
+  jobs: { apiVersion: "batch/v1", kind: "Job" },
+  cronjob: { apiVersion: "batch/v1", kind: "CronJob" },
+  cronjobs: { apiVersion: "batch/v1", kind: "CronJob" },
+  ingress: { apiVersion: "networking.k8s.io/v1", kind: "Ingress" },
+  ingresses: { apiVersion: "networking.k8s.io/v1", kind: "Ingress" },
+  persistentvolumeclaim: { apiVersion: "v1", kind: "PersistentVolumeClaim" },
+  pvc: { apiVersion: "v1", kind: "PersistentVolumeClaim" },
+  pvcs: { apiVersion: "v1", kind: "PersistentVolumeClaim" },
+};
+
+// 确保 YAML 包含 apiVersion 和 kind 字段
+function ensureYamlHeaders(yaml: string, kind: string): string {
+  const kindInfo = kindToApiVersion[kind.toLowerCase()];
+  if (!kindInfo) {
+    return yaml;
+  }
+
+  // 检查是否已经有 apiVersion 字段
+  if (yaml.includes("apiVersion:")) {
+    return yaml;
+  }
+
+  // 添加 apiVersion 和 kind 到 YAML 开头
+  return `apiVersion: ${kindInfo.apiVersion}
+kind: ${kindInfo.kind}
+${yaml}`;
+}
+
+// 从 YAML 中移除 apiVersion 和 kind（更新时后端不需要这些）
+function stripYamlHeaders(yaml: string): string {
+  const lines = yaml.split('\n');
+  const filteredLines = lines.filter(line => 
+    !line.startsWith('apiVersion:') && !line.startsWith('kind:')
+  );
+  return filteredLines.join('\n').trimStart();
+}
+
 export default function ResourceYamlEditor({ kind, namespace, name, onClose }: ResourceYamlEditorProps) {
   const { data, isLoading, error } = useResourceYaml(kind, namespace, name);
   const updateResourceYaml = useUpdateResourceYaml();
@@ -26,10 +82,12 @@ export default function ResourceYamlEditor({ kind, namespace, name, onClose }: R
   // 当获取到 YAML 数据时，更新本地状态
   useEffect(() => {
     if (data?.yaml) {
-      setYamlContent(data.yaml);
-      setOriginalYaml(data.yaml);
+      // 确保 YAML 包含 apiVersion 和 kind 字段
+      const fullYaml = ensureYamlHeaders(data.yaml, kind);
+      setYamlContent(fullYaml);
+      setOriginalYaml(fullYaml);
     }
-  }, [data?.yaml]);
+  }, [data?.yaml, kind]);
   
   // 检测是否有变更
   useEffect(() => {
@@ -41,11 +99,14 @@ export default function ResourceYamlEditor({ kind, namespace, name, onClose }: R
     if (!hasChanges) return;
     
     try {
+      // 更新时移除 apiVersion 和 kind，让后端处理
+      const yamlToUpdate = stripYamlHeaders(yamlContent);
+      
       await updateResourceYaml.mutateAsync({
         kind,
         namespace,
         name,
-        yaml: yamlContent,
+        yaml: yamlToUpdate,
       });
       
       toast({

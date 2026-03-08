@@ -220,3 +220,25 @@ Stage Summary:
 - DaemonSets: 2 个 (traefik, node-exporter)
 - Jobs: 2 个 (helm-install-traefik)
 - 前端 API 代理正常工作，所有 K8s API 端点可用
+
+---
+Task ID: 9
+Agent: Main
+Task: 修复资源控制器"编辑"按钮无响应问题
+
+Work Log:
+- 定位问题: DeploymentsPage、StatefulSetsPage、DaemonSetsPage 中的"编辑"按钮缺少 onClick 处理函数
+- 创建通用 ResourceYamlEditor 组件用于编辑 K8s 资源 YAML
+- 为三个页面添加编辑功能:
+  - 添加 isEditOpen 状态控制编辑对话框
+  - 添加 selectedResource 状态存储选中资源
+  - 添加 handleEdit 处理函数
+  - 在编辑按钮上添加 onClick 处理
+- 复用后端已有的 resources/yaml API
+
+Stage Summary:
+- 创建了 ResourceYamlEditor.tsx 通用组件
+- DeploymentsPage 编辑功能正常工作
+- StatefulSetsPage 编辑功能正常工作
+- DaemonSetsPage 编辑功能正常工作
+- 代码已推送到远程仓库: https://github.com/anhao-bo/k8s-manager.git

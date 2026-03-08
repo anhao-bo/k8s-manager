@@ -1145,6 +1145,50 @@ func (c *Client) GetPrometheusRules(namespace string) ([]models.PrometheusRuleIn
 
 ## 7. 常见问题与解决方案
 
+### 7.0 功能丢失问题（重要！）
+
+**问题**: 已开发的功能在开发新功能时丢失
+
+**根本原因**:
+1. 使用 `Write` 工具完全重写文件，覆盖了原有功能
+2. 没有先读取现有文件内容就进行修改
+3. 开发完成后没有验证所有功能是否正常
+
+**开发规范（必须遵守）**:
+
+```
+🚫 禁止：使用 Write 工具修改现有文件
+✅ 必须：先使用 Read 工具读取文件内容
+✅ 必须：使用 Edit/MultiEdit 工具进行增量修改
+✅ 必须：修改后运行 bun run lint 检查代码
+✅ 必须：验证相关功能是否正常工作
+✅ 必须：每次修复后推送到远程仓库
+```
+
+**工作流程**:
+
+```
+1. 开发前：git pull 拉取最新代码
+2. 开发中：
+   - Read 读取目标文件
+   - Edit/MultiEdit 增量修改
+   - bun run lint 检查语法
+3. 开发后：
+   - 验证功能是否正常
+   - git add & commit
+   - git push 推送到远程
+4. 更新 worklog.md 记录修改内容
+```
+
+**验证清单**:
+
+每次开发完成后，检查以下内容：
+- [ ] 新功能是否正常工作
+- [ ] 相关页面的其他按钮是否正常
+- [ ] 代码是否通过 lint 检查
+- [ ] 是否已推送到远程仓库
+- [ ] worklog.md 是否已更新
+
 ### 7.1 Kubernetes 客户端未初始化
 
 **问题**: API 返回 `Kubernetes client not initialized`

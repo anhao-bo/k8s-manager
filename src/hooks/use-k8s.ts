@@ -621,6 +621,25 @@ export function useDeleteCronJob() {
   };
 }
 
+// 删除 Service
+export function useDeleteService() {
+  const mutation = useK8sMutation();
+  return {
+    mutate: (namespace: string, name: string, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => {
+      if (options?.onSuccess || options?.onError) {
+        return mutation.mutate(
+          { endpoint: '/services', method: 'DELETE', body: { namespace, name } },
+          { onSuccess: options.onSuccess, onError: options.onError }
+        );
+      }
+      return mutation.mutate({ endpoint: '/services', method: 'DELETE', body: { namespace, name } });
+    },
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    isSuccess: mutation.isSuccess,
+  };
+}
+
 // 扩缩容 StatefulSet
 export function useScaleStatefulSet() {
   const mutation = useK8sMutation();

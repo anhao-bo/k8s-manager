@@ -2421,6 +2421,9 @@ func (c *Client) GetResourceYaml(kind, namespace, name string) (string, error) {
                 return "", fmt.Errorf("failed to get %s %s: %w", kind, name, err)
         }
         
+        // 清除 managedFields 字段（这些是 k8s 自动管理的字段管理元数据）
+        clearManagedFields(obj)
+        
         // 使用 sigs.k8s.io/yaml 序列化为 YAML
         yamlBytes, err := yaml.Marshal(obj)
         if err != nil {
@@ -2431,6 +2434,38 @@ func (c *Client) GetResourceYaml(kind, namespace, name string) (string, error) {
         result := fmt.Sprintf("apiVersion: %s\nkind: %s\n%s", apiVersion, kindStr, string(yamlBytes))
         
         return result, nil
+}
+
+// clearManagedFields 清除对象的 managedFields 字段
+func clearManagedFields(obj runtime.Object) {
+        switch o := obj.(type) {
+        case *corev1.Pod:
+                o.ObjectMeta.ManagedFields = nil
+        case *appsv1.Deployment:
+                o.ObjectMeta.ManagedFields = nil
+        case *corev1.Service:
+                o.ObjectMeta.ManagedFields = nil
+        case *corev1.ConfigMap:
+                o.ObjectMeta.ManagedFields = nil
+        case *corev1.Secret:
+                o.ObjectMeta.ManagedFields = nil
+        case *corev1.Namespace:
+                o.ObjectMeta.ManagedFields = nil
+        case *corev1.Node:
+                o.ObjectMeta.ManagedFields = nil
+        case *appsv1.StatefulSet:
+                o.ObjectMeta.ManagedFields = nil
+        case *appsv1.DaemonSet:
+                o.ObjectMeta.ManagedFields = nil
+        case *batchv1.Job:
+                o.ObjectMeta.ManagedFields = nil
+        case *batchv1.CronJob:
+                o.ObjectMeta.ManagedFields = nil
+        case *networkingv1.Ingress:
+                o.ObjectMeta.ManagedFields = nil
+        case *corev1.PersistentVolumeClaim:
+                o.ObjectMeta.ManagedFields = nil
+        }
 }
 
 // ==================== CronJob操作 ====================

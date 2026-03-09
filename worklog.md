@@ -1,6 +1,36 @@
 # KubeNext 开发日志
 
 ---
+Task ID: 19
+Agent: Main
+Task: 修复 YAML 编辑器显示 managedFields 字段问题
+
+Work Log:
+1. 问题分析:
+   - YAML 编辑器中显示大量 `f:` 开头的字段
+   - 这是 Kubernetes 的 `metadata.managedFields` 字段
+   - 是 k8s 用于追踪字段管理的元数据，不应显示给用户
+
+2. 解决方案:
+   - 修改后端 `GetResourceYaml` 方法
+   - 在序列化 YAML 之前清除 `managedFields` 字段
+   - 添加 `clearManagedFields` 函数处理所有资源类型
+
+3. 修改文件:
+   - `/mini-services/k8s-service/internal/k8s/client.go`
+   - 添加 `clearManagedFields` 函数，支持 13 种资源类型
+
+4. 技术细节:
+   - 安装 Go 1.23.0 到 `/home/z/go`
+   - 重新编译 k8s-service 后端服务
+   - 重启服务应用更改
+
+Stage Summary:
+- YAML 编辑器不再显示 managedFields 字段
+- 支持: Pod, Deployment, Service, ConfigMap, Secret, Namespace, Node, StatefulSet, DaemonSet, Job, CronJob, Ingress, PVC
+- 后端服务已重新编译并重启
+
+---
 Task ID: 18
 Agent: Main
 Task: 完善 ServicesPage 操作下拉菜单功能

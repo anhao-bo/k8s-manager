@@ -10,7 +10,10 @@
 2. [前端功能修复](#2-前端功能修复)
 3. [后端功能修复](#3-后端功能修复)
 4. [架构优化](#4-架构优化)
-5. [Bug 修复记录](#5-bug-修复记录)
+5. [UI 优化记录](#5-ui-优化记录)
+6. [Bug 修复记录](#6-bug-修复记录)
+7. [验证清单](#7-验证清单)
+8. [相关文档](#8-相关文档)
 
 ---
 
@@ -326,9 +329,55 @@ mini-services/k8s-service/
 
 ---
 
-## 5. Bug 修复记录
+## 5. UI 优化记录
 
-### 5.1 功能丢失问题
+### 5.1 简化服务与路由页面 (2025-01-18)
+
+**问题描述**: "服务与路由"页面包含 Services、Ingress、Endpoints 三个标签页，用户反馈只需展示 Services 列表
+
+**修复方案**:
+- 移除 Ingress 和 Endpoints 标签页
+- 页面标题改为"服务与路由"，副标题改为"管理 Kubernetes Services"
+- 添加服务类型统计卡片（总计、ClusterIP、NodePort、LoadBalancer）
+- 保留 Services 表格展示
+- 添加操作下拉菜单（查看详情、编辑 YAML、删除）
+
+**修复文件**: `src/components/pages/ServicesPage.tsx`
+
+**代码变更**:
+```tsx
+// 移除前：包含 Tabs 组件
+<Tabs value={activeTab} onValueChange={setActiveTab}>
+  <TabsList>
+    <TabsTrigger value="services">Services</TabsTrigger>
+    <TabsTrigger value="ingress">Ingress</TabsTrigger>
+    <TabsTrigger value="endpoints">Endpoints</TabsTrigger>
+  </TabsList>
+  ...
+</Tabs>
+
+// 修复后：直接展示 Services 表格
+<div className="space-y-6">
+  {/* Stats Cards */}
+  <div className="grid grid-cols-4 gap-4">
+    <div className="glass-card p-4">
+      <div className="text-2xl font-bold text-white">{stats.total}</div>
+      <div className="text-xs text-slate-400 mt-1">总计</div>
+    </div>
+    ...
+  </div>
+  {/* Services Table */}
+  ...
+</div>
+```
+
+**Git 提交**: `fc7c378 - refactor: 简化服务与路由页面，仅展示 Services 列表`
+
+---
+
+## 6. Bug 修复记录
+
+### 6.1 功能丢失问题
 
 **问题描述**: 开发新功能时，原有已实现的功能意外丢失
 
@@ -340,7 +389,7 @@ mini-services/k8s-service/
 3. 修改后检查相关功能是否正常
 4. 提交前运行 lint 检查
 
-### 5.2 ESLint 错误
+### 6.2 ESLint 错误
 
 **常见问题**:
 - 未使用的变量
@@ -362,7 +411,7 @@ const [data, setData] = useState();
 // 使用 data 或删除未使用的变量
 ```
 
-### 5.3 前后端端口配置
+### 6.3 前后端端口配置
 
 **配置说明**:
 - 前端: 3000 端口
@@ -376,23 +425,23 @@ const [data, setData] = useState();
 
 ---
 
-## 6. 验证清单
+## 7. 验证清单
 
 每次修复后，请执行以下验证:
 
-### 6.1 前端验证
+### 7.1 前端验证
 ```bash
 cd /home/z/my-project
 bun run lint  # 0 errors
 ```
 
-### 6.2 后端验证
+### 7.2 后端验证
 ```bash
 cd /home/z/my-project/mini-services/k8s-service
 go build -o k8s-service .  # 编译成功
 ```
 
-### 6.3 API 验证
+### 7.3 API 验证
 ```bash
 # 集群概览
 curl http://localhost:8080/api/overview
@@ -407,7 +456,7 @@ curl http://localhost:8080/api/pods
 curl http://localhost:8080/api/deployments
 ```
 
-### 6.4 功能验证清单
+### 7.4 功能验证清单
 
 - [ ] Dashboard 集群概览显示正常
 - [ ] Nodes 页面节点列表显示正常
@@ -427,7 +476,7 @@ curl http://localhost:8080/api/deployments
 
 ---
 
-## 7. 相关文档
+## 8. 相关文档
 
 - [架构设计文档](./ARCHITECTURE_V2.md)
 - [监控体系文档](./MONITORING.md)

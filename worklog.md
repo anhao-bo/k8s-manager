@@ -1,6 +1,37 @@
 # KubeNext 开发日志
 
 ---
+Task ID: 18
+Agent: Main
+Task: 完善 ServicesPage 操作下拉菜单功能
+
+Work Log:
+1. 完善 ServicesPage.tsx 操作下拉菜单功能:
+   - 查看详情：调用后端 API `/api/services/detail` 获取 Service 详细信息，显示在对话框中
+   - 编辑 YAML：使用 ResourceYamlEditor 组件编辑 Service YAML 配置
+   - 删除：添加 AlertDialog 确认对话框替代原生 confirm()
+
+2. 功能实现细节:
+   - 导入 AlertDialog 组件 (@/components/ui/alert-dialog)
+   - 添加 isDeleteOpen 状态控制删除确认对话框
+   - 添加 serviceToDelete 状态存储待删除的 Service 信息
+   - 添加 confirmDelete 函数处理删除确认操作
+   - 删除确认对话框显示 Service 名称和命名空间
+   - 删除操作显示加载状态 (Loader2 动画)
+
+3. 后端 API 支持:
+   - GET /api/services/detail?namespace={ns}&name={name} - 获取 Service 详情
+   - GET /api/resources/yaml?kind=Service&namespace={ns}&name={name} - 获取 YAML
+   - PUT /api/resources/yaml - 更新 YAML
+   - DELETE /api/services - 删除 Service
+
+Stage Summary:
+- ServicesPage 操作下拉菜单功能完善完成
+- 三个操作（查看详情、编辑YAML、删除）均可正常使用
+- 删除操作使用 AlertDialog 提供更好的用户体验
+- 代码已通过 lint 检查
+
+---
 Task ID: 17
 Agent: Main
 Task: 简化服务与路由页面 + 更新修复文档

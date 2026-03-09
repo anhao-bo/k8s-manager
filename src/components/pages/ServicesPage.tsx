@@ -19,6 +19,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Search,
@@ -27,11 +37,33 @@ import {
   RefreshCw,
   Network,
   Loader2,
+  Eye,
+  Edit,
+  Trash2,
+  Code,
+  AlertTriangle,
 } from "lucide-react";
-import { useServices } from "@/hooks/use-k8s";
+import { useServices, useDeleteService } from "@/hooks/use-k8s";
+import { useToast } from "@/hooks/use-toast";
+import ResourceYamlEditor from "@/components/ui/ResourceYamlEditor";
 
 interface ServicesPageProps {
   namespace: string;
+}
+
+// Service 详情类型
+interface ServiceDetail {
+  name: string;
+  namespace: string;
+  type: string;
+  clusterIP: string;
+  externalIP: string;
+  ports: Array<{ name: string; port: number; targetPort: string; protocol: string }>;
+  selector: Record<string, string>;
+  createdAt: string;
+  labels: Record<string, string>;
+  sessionAffinity: string;
+  internalTrafficPolicy: string;
 }
 
 // Format age from date
@@ -85,9 +117,18 @@ function LoadingSkeleton() {
 export default function ServicesPage({ namespace }: ServicesPageProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [selectedResource, setSelectedResource] = useState<{ namespace: string; name: string } | null>(null);
+  const [selectedService, setSelectedService] = useState<ServiceDetail | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<{ namespace: string; name: string } | null>(null);
+
+  const { toast } = useToast();
 
   // Fetch real K8s data
-  const { data: services, isLoading, refetch } = useServices();
+  const { data: services, isLoading, refetch, isRefetching } = useServices();
+  const deleteService = useDeleteService();
 
   // Ensure data is array
   const servicesList = Array.isArray(services) ? services : [];
@@ -109,6 +150,50 @@ export default function ServicesPage({ namespace }: ServicesPageProps) {
     loadBalancer: filteredServices.filter(s => s.type === "LoadBalancer").length,
   };
 
+  // Handle view detail
+  const handleViewDetail = async (svcNamespace: string, svcName: string) => {
+    try {
+      const response = await fetch(`/api/services/detail?namespace=${svcNamespace}&name=${svcName}&XTransformPort=8080`);
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedService(data);
+        setIsDetailOpen(true);
+      } else {
+        toast({ title: "获取详情失败", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "获取详情失败", variant: "destructive" });
+    }
+  };
+
+  // Handle edit YAML
+  const handleEditYaml = (svcNamespace: string, svcName: string) => {
+    setSelectedResource({ namespace: svcNamespace, name: svcName });
+    setIsEditOpen(true);
+  };
+
+  // Handle delete
+  const handleDelete = (svcNamespace: string, svcName: string) => {
+    setServiceToDelete({ namespace: svcNamespace, name: svcName });
+    setIsDeleteOpen(true);
+  };
+
+  // Confirm delete
+  const confirmDelete = () => {
+    if (serviceToDelete) {
+      deleteService.mutate(serviceToDelete.namespace, serviceToDelete.name, {
+        onSuccess: () => {
+          toast({ title: "删除成功", description: `Service ${serviceToDelete.name} 已删除` });
+          setIsDeleteOpen(false);
+          setServiceToDelete(null);
+        },
+        onError: (error) => {
+          toast({ title: "删除失败", description: error.message, variant: "destructive" });
+        },
+      });
+    }
+  };
+
   if (isLoading) {
     return <LoadingSkeleton />;
   }
@@ -126,8 +211,13 @@ export default function ServicesPage({ namespace }: ServicesPageProps) {
             variant="ghost" 
             className="glass-card px-4 py-2 text-sm text-slate-300"
             onClick={() => refetch()}
+            disabled={isRefetching}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            {isRefetching ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
             刷新
           </Button>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -200,7 +290,7 @@ export default function ServicesPage({ namespace }: ServicesPageProps) {
 
       {/* Services Table */}
       {filteredServices.length > 0 ? (
-        <div className="glass-card">
+        <div className="glass-card overflow-hidden">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider">
               <tr>
@@ -251,14 +341,23 @@ export default function ServicesPage({ namespace }: ServicesPageProps) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-slate-900 border-slate-700">
-                        <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
-                          查看详情
+                        <DropdownMenuItem 
+                          className="text-slate-300 hover:text-white focus:bg-slate-800"
+                          onClick={() => handleViewDetail(service.namespace, service.name)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" /> 查看详情
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-slate-300 hover:text-white focus:bg-slate-800">
-                          编辑 YAML
+                        <DropdownMenuItem 
+                          className="text-slate-300 hover:text-white focus:bg-slate-800"
+                          onClick={() => handleEditYaml(service.namespace, service.name)}
+                        >
+                          <Edit className="h-4 w-4 mr-2" /> 编辑 YAML
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-rose-400 hover:text-rose-300 focus:bg-slate-800">
-                          删除
+                        <DropdownMenuItem
+                          className="text-rose-500 hover:text-rose-300 focus:bg-rose-500/10"
+                          onClick={() => handleDelete(service.namespace, service.name)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> 删除
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -274,6 +373,159 @@ export default function ServicesPage({ namespace }: ServicesPageProps) {
           <p className="text-slate-400 text-sm">当前命名空间没有 Service</p>
         </div>
       )}
+
+      {/* Detail Dialog */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Network className="h-5 w-5 text-sky-400" />
+              Service 详情
+            </DialogTitle>
+          </DialogHeader>
+          {selectedService && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-slate-500 text-xs">名称</p>
+                  <p className="text-white font-mono">{selectedService.name}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">命名空间</p>
+                  <p className="text-white">{selectedService.namespace}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">类型</p>
+                  <Badge variant="secondary" className="bg-slate-800">{selectedService.type}</Badge>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">ClusterIP</p>
+                  <p className="text-sky-400 font-mono text-sm">{selectedService.clusterIP || "None"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">外部IP</p>
+                  <p className="text-white text-sm">{selectedService.externalIP || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs">会话亲和性</p>
+                  <p className="text-white text-sm">{selectedService.sessionAffinity || "None"}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-slate-500 text-xs">创建时间</p>
+                  <p className="text-white text-sm">{selectedService.createdAt}</p>
+                </div>
+              </div>
+              
+              {/* Selector */}
+              {selectedService.selector && Object.keys(selectedService.selector).length > 0 && (
+                <div>
+                  <p className="text-slate-500 text-xs mb-2">Selector</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(selectedService.selector).map(([key, value]) => (
+                      <Badge key={key} variant="secondary" className="bg-slate-800 text-xs">
+                        {key}={value}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Ports */}
+              {selectedService.ports && selectedService.ports.length > 0 && (
+                <div>
+                  <p className="text-slate-500 text-xs mb-2">端口</p>
+                  <div className="space-y-2">
+                    {selectedService.ports.map((port, idx) => (
+                      <div key={idx} className="bg-slate-800 rounded p-3 flex justify-between items-center">
+                        <div>
+                          <p className="text-sky-400 font-mono text-sm">{port.name || `port-${idx}`}</p>
+                          <p className="text-slate-400 text-xs">{port.port} → {port.targetPort} ({port.protocol})</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="border-slate-700 text-slate-300">
+              关闭
+            </Button>
+            <Button 
+              className="bg-sky-500 hover:bg-sky-600"
+              onClick={() => {
+                setIsDetailOpen(false);
+                if (selectedService) {
+                  handleEditYaml(selectedService.namespace, selectedService.name);
+                }
+              }}
+            >
+              <Edit className="h-4 w-4 mr-2" /> 编辑 YAML
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit YAML Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-5xl h-[700px] bg-slate-900 border-slate-700 flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Code className="h-5 w-5 text-sky-400" />
+              编辑 Service YAML - {selectedResource?.name}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">命名空间: {selectedResource?.namespace}</DialogDescription>
+          </DialogHeader>
+          {selectedResource && (
+            <ResourceYamlEditor 
+              kind="Service" 
+              namespace={selectedResource.namespace} 
+              name={selectedResource.name} 
+              onClose={() => setIsEditOpen(false)} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent className="bg-slate-900 border-slate-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-rose-400" />
+              确认删除 Service
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              您确定要删除 Service <span className="text-rose-400 font-mono font-bold">{serviceToDelete?.name}</span> 吗？
+              <br />
+              <span className="text-slate-500 text-xs">命名空间: {serviceToDelete?.namespace}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700">
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteService.isPending}
+              className="bg-rose-500 hover:bg-rose-600 text-white"
+            >
+              {deleteService.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  删除中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  确认删除
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
